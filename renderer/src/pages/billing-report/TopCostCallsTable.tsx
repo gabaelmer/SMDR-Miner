@@ -1,0 +1,163 @@
+import { BillingReportSortBy, BillingReportSortDir, BillingReportTopCostCall } from '../../../../shared/types';
+import { CAT_COLOR } from './constants';
+import { fmtCur, fmtDur } from './utils';
+
+interface TopCostCallsTableProps {
+  topCostCalls: BillingReportTopCostCall[];
+  topCallsTotal: number;
+  sortBy: BillingReportSortBy;
+  sortDir: BillingReportSortDir;
+  pageSize: number;
+  page: number;
+  totalPages: number;
+  loading: boolean;
+  isRefreshing: boolean;
+  onSortByChange: (value: BillingReportSortBy) => void;
+  onSortDirToggle: () => void;
+  onPageSizeChange: (value: number) => void;
+  onPrevPage: () => void;
+  onNextPage: () => void;
+}
+
+export function TopCostCallsTable({
+  topCostCalls,
+  topCallsTotal,
+  sortBy,
+  sortDir,
+  pageSize,
+  page,
+  totalPages,
+  loading,
+  isRefreshing,
+  onSortByChange,
+  onSortDirToggle,
+  onPageSizeChange,
+  onPrevPage,
+  onNextPage
+}: TopCostCallsTableProps) {
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3" style={{ borderColor: 'var(--border)' }}>
+        <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
+          Top Cost Calls ({topCallsTotal.toLocaleString()})
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs" style={{ color: 'var(--muted2)' }}>
+            Sort
+            <select
+              value={sortBy}
+              onChange={(e) => onSortByChange(e.target.value as BillingReportSortBy)}
+              className="ml-2 rounded-lg border px-2 py-1 text-xs"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+            >
+              <option value="cost">Cost</option>
+              <option value="duration">Duration</option>
+              <option value="date">Date</option>
+            </select>
+          </label>
+          <button
+            onClick={onSortDirToggle}
+            className="rounded-lg border px-2 py-1 text-xs font-semibold"
+            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+          >
+            {sortDir === 'desc' ? 'Desc' : 'Asc'}
+          </button>
+          <label className="text-xs" style={{ color: 'var(--muted2)' }}>
+            Rows
+            <select
+              value={pageSize}
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              className="ml-2 rounded-lg border px-2 py-1 text-xs"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+            >
+              {[10, 20, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+              {['Date', 'From', 'Dialled', 'Category', 'Duration', 'Rate/min', 'Cost'].map((header) => (
+                <th key={header} className="text-left px-4 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {topCostCalls.map((call) => (
+              <tr key={call.id} className="border-b" style={{ borderColor: 'var(--border)' }}>
+                <td className="px-4 py-2 text-xs" style={{ color: 'var(--muted)' }}>
+                  {call.date} {call.start_time}
+                </td>
+                <td className="px-4 py-2 font-mono text-xs" style={{ color: 'var(--text)' }}>
+                  {call.calling_party}
+                </td>
+                <td className="px-4 py-2 font-mono text-xs" style={{ color: 'var(--text)' }}>
+                  {call.digits_dialed || call.called_party}
+                </td>
+                <td className="px-4 py-2">
+                  <span
+                    className="px-2 py-0.5 rounded-full text-xs font-semibold border"
+                    style={{
+                      color: CAT_COLOR[call.call_category],
+                      borderColor: CAT_COLOR[call.call_category] + '55',
+                      backgroundColor: CAT_COLOR[call.call_category] + '22'
+                    }}
+                  >
+                    {call.call_category}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-xs" style={{ color: 'var(--muted)' }}>
+                  {fmtDur(call.duration_seconds)}
+                </td>
+                <td className="px-4 py-2 text-xs" style={{ color: 'var(--muted)' }}>
+                  {fmtCur(call.rate_per_minute, call.bill_currency)}
+                </td>
+                <td className="px-4 py-2 font-bold text-brand-400">{fmtCur(call.call_cost, call.bill_currency)}</td>
+              </tr>
+            ))}
+            {!topCostCalls.length && (
+              <tr>
+                <td colSpan={7} className="px-4 py-6 text-center text-xs" style={{ color: 'var(--muted)' }}>
+                  No calls found
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="px-4 py-3 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+        <p className="text-xs" style={{ color: 'var(--muted2)' }}>
+          Page {Math.min(page, totalPages)} of {totalPages}
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={onPrevPage}
+            disabled={page <= 1 || loading || isRefreshing}
+            className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+          >
+            Previous
+          </button>
+          <button
+            onClick={onNextPage}
+            disabled={page >= totalPages || loading || isRefreshing}
+            className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# Runtime data
+config/*.sqlite
+config/*.sqlite-*
+config/*.db
+config/archive/*.csv
+config/config-history/

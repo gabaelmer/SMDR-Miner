@@ -1,0 +1,28 @@
+{
+  "connection": {
+    "controllerIps": [
+      "192.168.0.52"
+    ],
+    "port": 1752,
+    "concurrentConnections": 1,
+    "autoReconnect": true,
+    "reconnectDelayMs": 5000,
+    "autoReconnectPrimary": true,
+    "primaryRecheckDelayMs": 60000,
+    "ipWhitelist": []
+  },
+  "storage": {
+    "dbPath": "/home/elmer/Documents/AppDev/Project-SMDR-billing/config/smdr-insight.sqlite",
+    "retentionDays": 60,
+    "archiveDirectory": "/home/elmer/Documents/AppDev/Project-SMDR-billing/config/archive"
+  },
+  "alerts": {
+    "longCallMinutes": 30,
+    "watchNumbers": [],
+    "repeatedBusyThreshold": 3,
+    "repeatedBusyWindowMinutes": 30,
+    "detectTagCalls": true,
+    "detectTollDenied": true
+  },
+  "maxInMemoryRecords": 2000
+}

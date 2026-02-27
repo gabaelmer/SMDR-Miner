@@ -1,0 +1,20 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "outDir": "../dist/main",
+    "rootDir": "..",
+    "types": ["node"],
+    "sourceMap": true
+  },
+  "include": [
+    "./**/*.ts",
+    "../backend/**/*.ts",
+    "../shared/**/*.ts"
+  ],
+  "exclude": [
+    "../renderer/**/*",
+    "../tests/**/*",
+    "../dist/**/*"
+  ]
+}
