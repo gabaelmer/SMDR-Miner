@@ -658,21 +658,33 @@ export function DiagnosticsPage() {
       <div className="card p-2.5">
         <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text)' }}>Quick Stats</h2>
         <div className="grid gap-2 md:grid-cols-4">
-          <div className="p-3 rounded-xl flex flex-col justify-between min-h-[96px]" style={{ background: 'rgba(36, 132, 235, 0.1)' }}>
+          <div
+            className="p-3 rounded-xl border flex flex-col min-h-[126px]"
+            style={{ background: 'rgba(36, 132, 235, 0.1)', borderColor: 'var(--border)' }}
+          >
             <p className="text-sm" style={{ color: 'var(--muted)' }}>Total Calls Today</p>
-            <p className="text-3xl font-extrabold leading-none" style={{ color: 'var(--brand)' }}>{dashboard.totalCallsToday}</p>
+            <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--brand)' }}>{dashboard.totalCallsToday}</p>
           </div>
-          <div className="p-3 rounded-xl flex flex-col justify-between min-h-[96px]" style={{ background: 'rgba(36, 132, 235, 0.1)' }}>
+          <div
+            className="p-3 rounded-xl border flex flex-col min-h-[126px]"
+            style={{ background: 'rgba(36, 132, 235, 0.1)', borderColor: 'var(--border)' }}
+          >
             <p className="text-sm" style={{ color: 'var(--muted)' }}>Incoming</p>
-            <p className="text-3xl font-extrabold leading-none" style={{ color: 'var(--brand)' }}>{dashboard.incomingCalls}</p>
+            <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--brand)' }}>{dashboard.incomingCalls}</p>
           </div>
-          <div className="p-3 rounded-xl flex flex-col justify-between min-h-[96px]" style={{ background: 'rgba(38, 182, 127, 0.1)' }}>
+          <div
+            className="p-3 rounded-xl border flex flex-col min-h-[126px]"
+            style={{ background: 'rgba(38, 182, 127, 0.1)', borderColor: 'var(--border)' }}
+          >
             <p className="text-sm" style={{ color: 'var(--muted)' }}>Outgoing</p>
-            <p className="text-3xl font-extrabold leading-none" style={{ color: 'var(--green)' }}>{dashboard.outgoingCalls}</p>
+            <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--green)' }}>{dashboard.outgoingCalls}</p>
           </div>
-          <div className="p-3 rounded-xl flex flex-col justify-between min-h-[96px]" style={{ background: 'rgba(139, 92, 246, 0.1)' }}>
+          <div
+            className="p-3 rounded-xl border flex flex-col min-h-[126px]"
+            style={{ background: 'rgba(139, 92, 246, 0.1)', borderColor: 'var(--border)' }}
+          >
             <p className="text-sm" style={{ color: 'var(--muted)' }}>Parse Errors</p>
-            <p className="text-3xl font-extrabold leading-none" style={{ color: 'var(--purple)' }}>{parseErrors.length}</p>
+            <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--purple)' }}>{parseErrors.length}</p>
           </div>
         </div>
       </div>
@@ -755,7 +767,7 @@ export function DiagnosticsPage() {
           )}
         </div>
 
-        <div className="card p-2.5 order-4 min-h-0 overflow-hidden flex flex-col lg:order-2 lg:col-start-2 lg:row-start-1 lg:row-span-2">
+        <div className="card p-2.5 order-4 min-h-0 overflow-hidden flex flex-col lg:order-2 lg:col-start-2 lg:row-start-1">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <h2 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>Real-time Event Log</h2>
             <div className="flex flex-wrap items-center gap-2">
@@ -866,7 +878,7 @@ export function DiagnosticsPage() {
             )}
           </div>
         </div>
-        <div className="card p-2.5 order-2 min-h-0 overflow-hidden flex flex-col lg:order-4 lg:col-start-2 lg:row-start-3">
+        <div className="card p-2.5 order-2 min-h-0 overflow-hidden flex flex-col lg:order-4 lg:col-start-2 lg:row-start-2 lg:row-span-2">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <h2 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
               Recent Parse Errors ({parseErrors.length})
@@ -893,7 +905,7 @@ export function DiagnosticsPage() {
 
           {parseErrors.length > 0 ? (
             <div className="flex-1 min-h-0 space-y-2 overflow-auto pr-1">
-              {parseErrors.slice(0, 6).map((error, index) => (
+              {parseErrors.map((error, index) => (
                 <div key={`${error.createdAt ?? index}-${index}`} className="p-3 rounded-xl bg-red-900/20 border border-red-800">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -914,11 +926,6 @@ export function DiagnosticsPage() {
                   </p>
                 </div>
               ))}
-              {parseErrors.length > 6 && (
-                <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                  Showing 6 most recent parse errors.
-                </p>
-              )}
             </div>
           ) : (
             <p className="text-sm" style={{ color: 'var(--muted)' }}>No parse errors recorded.</p>
