@@ -1,494 +1,395 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# SMDR Insight - Production Installer for Ubuntu/Debian
-# Version: 2.1.0-web
-# 
-# Supports headless server installation with systemd service
-# Compatible with Ubuntu 20.04+ and Debian 11+
+# SMDR Insight installer for Ubuntu/Debian servers
+# Supports one-line install:
+# curl -fsSL https://raw.githubusercontent.com/gabaelmer/SMDR-Miner/main/install.sh | sudo bash
 #
 
-set -e
+set -euo pipefail
 
-# Configuration
-REPO_URL="https://github.com/gabaelmer/SMDR-Insight.git"
-INSTALL_DIR="/opt/smdr-insight"
+APP_NAME="SMDR Insight"
 SERVICE_NAME="smdr-insight"
+INSTALL_DIR="/opt/smdr-insight"
+REPO_URL="https://github.com/gabaelmer/SMDR-Miner.git"
+REPO_REF="main"
+SERVICE_USER="smdr"
 BACKUP_DIR="/var/backups/smdr-insight"
-CONFIG_DIR="/etc/smdr-insight"
-LOG_DIR="/var/log/smdr-insight"
+ENV_FILE="/etc/default/smdr-insight"
 DEFAULT_PORT=61593
+PORT="$DEFAULT_PORT"
+ENABLE_FIREWALL=1
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Logging functions
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
-# Parse command line arguments
-PORT=$DEFAULT_PORT
+usage() {
+  cat <<EOF
+Usage: sudo bash install.sh [options]
+
+Options:
+  --port <number>           HTTPS listen port (default: ${DEFAULT_PORT})
+  --install-dir <path>      Install directory (default: ${INSTALL_DIR})
+  --repo-url <url>          Git repository URL (default: ${REPO_URL})
+  --repo-ref <ref>          Git branch/tag/sha to install (default: ${REPO_REF})
+  --service-user <user>     Linux user to run service (default: ${SERVICE_USER})
+  --no-firewall             Skip ufw configuration
+  -h, --help                Show this help
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
-    case $1 in
-        --port)
-            PORT="$2"
-            shift 2
-            ;;
-        *)
-            shift
-            ;;
-    esac
+  case "$1" in
+    --port)
+      PORT="${2:-}"
+      shift 2
+      ;;
+    --install-dir)
+      INSTALL_DIR="${2:-}"
+      shift 2
+      ;;
+    --repo-url)
+      REPO_URL="${2:-}"
+      shift 2
+      ;;
+    --repo-ref)
+      REPO_REF="${2:-}"
+      shift 2
+      ;;
+    --service-user)
+      SERVICE_USER="${2:-}"
+      shift 2
+      ;;
+    --no-firewall)
+      ENABLE_FIREWALL=0
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      log_error "Unknown argument: $1"
+      usage
+      exit 1
+      ;;
+  esac
 done
 
-# Check if running as root
-check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        log_error "Please run as root or with sudo"
-        echo "Usage: sudo $0 [--port PORT]"
-        echo "Options:"
-        echo "  --port PORT     Set web interface port (default: $DEFAULT_PORT)"
-        exit 1
-    fi
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+  log_error "Invalid --port value: ${PORT}"
+  exit 1
+fi
+
+require_root() {
+  if [[ "$EUID" -ne 0 ]]; then
+    log_error "Run as root (or with sudo)."
+    exit 1
+  fi
 }
 
-# Detect user
-detect_user() {
-    if [ -n "$SUDO_USER" ]; then
-        SERVICE_USER="$SUDO_USER"
-        log_info "Detected sudo user: $SERVICE_USER"
-    else
-        SERVICE_USER="root"
-        log_info "Running as root user"
-    fi
+run_as_service_user() {
+  local cmd="$1"
+  if [[ "$SERVICE_USER" == "root" ]]; then
+    bash -lc "$cmd"
+    return
+  fi
+  if command -v runuser >/dev/null 2>&1; then
+    runuser -u "$SERVICE_USER" -- bash -lc "$cmd"
+  else
+    su -s /bin/bash "$SERVICE_USER" -c "$cmd"
+  fi
 }
 
-# System requirements check
-check_system() {
-    log_step "Checking system requirements..."
-    
-    # Check OS
-    if [ ! -f /etc/os-release ]; then
-        log_error "Cannot detect OS. This script supports Ubuntu/Debian only."
-        exit 1
-    fi
-    
-    source /etc/os-release
-    if [[ ! "$ID" =~ ^(ubuntu|debian)$ ]]; then
-        log_warn "Unsupported OS: $ID. This script is tested on Ubuntu/Debian."
-        echo "Continuing anyway..."
-    fi
-    
-    # Check architecture
-    ARCH=$(uname -m)
-    if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "aarch64" ]; then
-        log_warn "Unsupported architecture: $ARCH. Expected x86_64 or aarch64."
-    fi
-    
-    log_info "OS: $PRETTY_NAME"
-    log_info "Architecture: $ARCH"
+check_os() {
+  log_step "Checking OS compatibility..."
+  if [[ ! -f /etc/os-release ]]; then
+    log_error "/etc/os-release not found. Ubuntu/Debian is required."
+    exit 1
+  fi
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  if [[ ! "${ID:-}" =~ ^(ubuntu|debian)$ ]]; then
+    log_warn "Detected OS '${ID:-unknown}'. This installer is intended for Ubuntu/Debian."
+  fi
+  log_info "Detected: ${PRETTY_NAME:-unknown}"
 }
 
-# Install system dependencies
-install_dependencies() {
-    log_step "Installing system dependencies..."
-    
-    apt-get update -qq
-    
-    # Install required packages for headless build
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        curl \
-        gnupg \
-        ca-certificates \
-        git \
-        build-essential \
-        ufw \
-        jq \
-        fontconfig \
-        libfontconfig1 \
-        || {
-            log_error "Failed to install dependencies"
-            exit 1
-        }
-    
-    # Install Node.js 24.x (Latest LTS)
-    log_info "Installing Node.js 24.x (Latest LTS)..."
-    mkdir -p /etc/apt/keyrings
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
-    
-    apt-get update -qq
-    apt-get install -y -qq nodejs
-    
-    # Verify installations
-    log_info "Node.js version: $(node -v)"
-    log_info "npm version: $(npm -v)"
+install_system_dependencies() {
+  log_step "Installing system dependencies and tools..."
+  apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    ca-certificates \
+    curl \
+    git \
+    gnupg \
+    build-essential \
+    python3 \
+    make \
+    g++ \
+    pkg-config \
+    openssl \
+    ufw \
+    jq
 }
 
-# Configure firewall
-configure_firewall() {
-    log_step "Configuring firewall..."
-    
-    if command -v ufw &> /dev/null; then
-        if ufw status | grep -q "Status: active"; then
-            if ! ufw status | grep -q "$PORT/tcp"; then
-                ufw allow "$PORT/tcp" comment "SMDR Insight Web Interface"
-                log_info "Opened port $PORT in firewall"
-            else
-                log_info "Port $PORT already allowed in firewall"
-            fi
-        else
-            log_warn "UFW is not active. Consider enabling it: ufw enable"
-        fi
-    else
-        log_warn "UFW not installed. Skipping firewall configuration."
-    fi
+ensure_node_24() {
+  local current_major=0
+  if command -v node >/dev/null 2>&1; then
+    current_major="$(node -v | sed -E 's/^v([0-9]+).*/\1/')"
+  fi
+
+  if (( current_major >= 24 )); then
+    log_info "Node.js $(node -v) already satisfies requirement (>=24)."
+    return
+  fi
+
+  log_step "Installing Node.js 24.x..."
+  mkdir -p /etc/apt/keyrings
+  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+    | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+  echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" \
+    > /etc/apt/sources.list.d/nodesource.list
+
+  apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs
+
+  if ! command -v node >/dev/null 2>&1; then
+    log_error "Node.js installation failed."
+    exit 1
+  fi
+
+  log_info "Node.js version: $(node -v)"
+  log_info "npm version: $(npm -v)"
 }
 
-# Stop existing service
-stop_existing_service() {
-    log_step "Stopping existing service (if running)..."
-    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
-    pkill -f "node.*node-server" 2>/dev/null || true
-    sleep 2
+ensure_service_user() {
+  log_step "Preparing service user..."
+  if [[ "$SERVICE_USER" == "root" ]]; then
+    log_warn "Service user is root. For better security, use a dedicated user (default: smdr)."
+    return
+  fi
+
+  if id -u "$SERVICE_USER" >/dev/null 2>&1; then
+    log_info "Using existing user: $SERVICE_USER"
+    return
+  fi
+
+  useradd --system --user-group --home-dir "$INSTALL_DIR" --create-home --shell /usr/sbin/nologin "$SERVICE_USER"
+  log_info "Created service user: $SERVICE_USER"
 }
 
-# Prepare installation directory
-prepare_directory() {
-    log_step "Preparing installation directory..."
-    
-    if [ -d "$INSTALL_DIR" ]; then
-        log_info "Updating existing installation..."
-        chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
-        cd "$INSTALL_DIR"
+prepare_source() {
+  log_step "Preparing application source..."
 
-        # Backup current config before update
-        if [ -d "$INSTALL_DIR/config" ]; then
-            mkdir -p "$BACKUP_DIR"
-            BACKUP_NAME="smdr-backup-$(date +%Y%m%d-%H%M%S)"
-            cp -r "$INSTALL_DIR/config" "$BACKUP_DIR/$BACKUP_NAME"
-            log_info "Configuration backed up to: $BACKUP_DIR/$BACKUP_NAME"
-        fi
-    else
-        log_info "Creating new installation..."
-        mkdir -p "$INSTALL_DIR"
-        chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
-        cd "$INSTALL_DIR"
-        
-        # Clone repository
-        log_info "Cloning repository..."
-        sudo -u "$SERVICE_USER" git clone "$REPO_URL" "$INSTALL_DIR"
-    fi
-    
-    # Create directories
-    mkdir -p "$CONFIG_DIR"
-    mkdir -p "$LOG_DIR"
-    mkdir -p "$BACKUP_DIR"
-    
+  mkdir -p "$(dirname "$INSTALL_DIR")"
+
+  if [[ -d "$INSTALL_DIR/.git" ]]; then
+    log_info "Existing git checkout found. Updating to ${REPO_REF}..."
     chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$CONFIG_DIR"
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR"
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$BACKUP_DIR"
+    git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
+    git -C "$INSTALL_DIR" fetch --depth 1 origin "$REPO_REF"
+    git -C "$INSTALL_DIR" checkout -B "$REPO_REF" FETCH_HEAD
+  else
+    if [[ -d "$INSTALL_DIR" ]] && [[ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
+      local backup_path="${BACKUP_DIR}/preinstall-$(date +%Y%m%d-%H%M%S)"
+      mkdir -p "$BACKUP_DIR"
+      mv "$INSTALL_DIR" "$backup_path"
+      log_warn "Existing non-git directory moved to: $backup_path"
+    fi
+
+    git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$INSTALL_DIR"
+  fi
+
+  mkdir -p "$BACKUP_DIR"
+  chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 }
 
-# Build application (headless mode)
 build_application() {
-    log_step "Building application (headless mode)..."
-    
-    cd "$INSTALL_DIR"
-    
-    # Set environment variables for headless build
-    export QT_QPA_PLATFORM=offscreen
-    export DISPLAY=:99
-    export FONTCONFIG_PATH=/etc/fonts
-    export NODE_OPTIONS="--max-old-space-size=2048"
-    export XDG_RUNTIME_DIR=/tmp/runtime-$SERVICE_USER
-    
-    # Create runtime directory
-    mkdir -p "$XDG_RUNTIME_DIR"
-    chmod 700 "$XDG_RUNTIME_DIR"
-    chown "$SERVICE_USER:$SERVICE_USER" "$XDG_RUNTIME_DIR"
-    
-    # Install npm dependencies (including dev dependencies for build)
-    log_info "Installing npm dependencies..."
-    sudo -u "$SERVICE_USER" npm install --loglevel=error
-    
-    # Rebuild native modules
-    log_info "Rebuilding native modules..."
-    sudo -u "$SERVICE_USER" npm rebuild better-sqlite3
-    
-    # Build the application (headless mode)
-    log_info "Building application..."
-    sudo -u "$SERVICE_USER" env \
-        QT_QPA_PLATFORM=offscreen \
-        DISPLAY=:99 \
-        FONTCONFIG_PATH=/etc/fonts \
-        XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
-        npx vite build --config renderer/vite.config.ts
-    
-    # Build backend
-    log_info "Building backend..."
-    sudo -u "$SERVICE_USER" npx tsc -p main/tsconfig.json
-    
-    # Fix permissions
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
-    
-    log_info "Build completed successfully"
+  log_step "Installing npm dependencies and building app..."
+
+  if [[ -f "$INSTALL_DIR/package-lock.json" ]]; then
+    run_as_service_user "cd '$INSTALL_DIR' && npm ci --no-audit --no-fund"
+  else
+    run_as_service_user "cd '$INSTALL_DIR' && npm install --no-audit --no-fund"
+  fi
+
+  run_as_service_user "cd '$INSTALL_DIR' && npm run rebuild:native"
+  run_as_service_user "cd '$INSTALL_DIR' && npm run build"
 }
 
-# Configure application
-configure_application() {
-    log_step "Configuring application..."
-    
-    # Create config directory in install dir
-    mkdir -p "$INSTALL_DIR/config"
-    
-    # Create default settings if not exists
-    if [ ! -f "$INSTALL_DIR/config/settings.json" ]; then
-        cat > "$INSTALL_DIR/config/settings.json" << EOF
-{
-  "connection": {
-    "controllerIps": ["192.168.0.10"],
-    "port": 1752,
-    "concurrentConnections": 1,
-    "autoReconnect": true,
-    "reconnectDelayMs": 5000,
-    "autoReconnectPrimary": true,
-    "primaryRecheckDelayMs": 60000,
-    "ipWhitelist": []
-  },
-  "storage": {
-    "dbPath": "$INSTALL_DIR/config/smdr-insight.sqlite",
-    "retentionDays": 60,
-    "archiveDirectory": "$INSTALL_DIR/config/archive"
-  },
-  "alerts": {
-    "longCallMinutes": 30,
-    "watchNumbers": [],
-    "repeatedBusyThreshold": 3,
-    "repeatedBusyWindowMinutes": 30,
-    "detectTagCalls": true,
-    "detectTollDenied": true
-  },
-  "maxInMemoryRecords": 2000
+ensure_runtime_config() {
+  log_step "Ensuring runtime config directories..."
+  mkdir -p "$INSTALL_DIR/config" "$INSTALL_DIR/config/archive" "$INSTALL_DIR/config/tls" "$BACKUP_DIR"
+
+  if [[ ! -f "$INSTALL_DIR/config/settings.json" ]] && [[ -f "$INSTALL_DIR/config/settings.json.example" ]]; then
+    cp "$INSTALL_DIR/config/settings.json.example" "$INSTALL_DIR/config/settings.json"
+  fi
+
+  if [[ -f "$INSTALL_DIR/config/billing.json" ]]; then
+    chmod 640 "$INSTALL_DIR/config/billing.json" || true
+  fi
+
+  chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/config" "$BACKUP_DIR"
 }
+
+set_env_value() {
+  local key="$1"
+  local value="$2"
+  if grep -qE "^${key}=" "$ENV_FILE" 2>/dev/null; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+  else
+    echo "${key}=${value}" >> "$ENV_FILE"
+  fi
+}
+
+configure_env_file() {
+  log_step "Configuring runtime environment file..."
+  touch "$ENV_FILE"
+  chmod 640 "$ENV_FILE"
+
+  set_env_value "SMDR_PORT" "$PORT"
+  set_env_value "SMDR_CONFIG_DIR" "$INSTALL_DIR/config"
+  set_env_value "SMDR_DB_PATH" "$INSTALL_DIR/config/smdr-insight.sqlite"
+  set_env_value "SMDR_TLS_CN" "$(hostname -f 2>/dev/null || hostname)"
+
+  if ! grep -q "^# Optional bootstrap admin credentials" "$ENV_FILE"; then
+    cat >> "$ENV_FILE" <<'EOF'
+
+# Optional bootstrap admin credentials (used only when no users exist)
+# SMDR_BOOTSTRAP_ADMIN_USERNAME=admin
+# SMDR_BOOTSTRAP_ADMIN_PASSWORD=CHANGE_THIS_TO_A_STRONG_PASSWORD
 EOF
-        log_info "Created default configuration"
-    fi
-    
-    # Create archive directory
-    mkdir -p "$INSTALL_DIR/config/archive"
-    
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/config"
+  fi
 }
 
-# Create systemd service
 create_systemd_service() {
-    log_step "Creating systemd service..."
-    
-    NODE_PATH=$(which node)
-    
-    cat > "/etc/systemd/system/$SERVICE_NAME.service" << EOF
+  log_step "Creating systemd service..."
+
+  cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
-Description=SMDR Insight - Web-Based SMDR Analytics
-Documentation=https://github.com/gabaelmer/SMDR-Insight
-After=network.target syslog.target
+Description=${APP_NAME} service
+After=network-online.target
+Wants=network-online.target
+Documentation=${REPO_URL}
 
 [Service]
 Type=simple
-User=$SERVICE_USER
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$NODE_PATH dist/main/main/node-server.js
+User=${SERVICE_USER}
+Group=${SERVICE_USER}
+WorkingDirectory=${INSTALL_DIR}
+Environment=NODE_ENV=production
+EnvironmentFile=-${ENV_FILE}
+ExecStart=/usr/bin/env node dist/main/main/node-server.js
 Restart=always
 RestartSec=5
-Environment=NODE_ENV=production
-Environment=SMDR_PORT=$PORT
-Environment=SMDR_CONFIG_DIR=$INSTALL_DIR/config
-Environment=SMDR_DB_PATH=$INSTALL_DIR/config/smdr-insight.sqlite
-
-# Security hardening
 NoNewPrivileges=true
-ProtectSystem=strict
-ReadWritePaths=$INSTALL_DIR/config
 PrivateTmp=true
-
-# Resource limits
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=${INSTALL_DIR}/config
 LimitNOFILE=65535
-MemoryMax=1G
-
-# Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=$SERVICE_NAME
+SyslogIdentifier=${SERVICE_NAME}
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
-    log_info "Created systemd service file"
 }
 
-# Create backup script
-create_backup_script() {
-    log_step "Creating backup script..."
-    
-    cat > "$INSTALL_DIR/scripts/backup.sh" << 'EOF'
-#!/bin/bash
-# SMDR Insight - Automated Backup Script
+configure_firewall() {
+  if (( ENABLE_FIREWALL == 0 )); then
+    log_info "Firewall configuration skipped (--no-firewall)."
+    return
+  fi
 
-INSTALL_DIR="/opt/smdr-insight"
-BACKUP_DIR="/var/backups/smdr-insight"
-RETENTION_DAYS=30
+  if ! command -v ufw >/dev/null 2>&1; then
+    log_warn "ufw not found; skipping firewall configuration."
+    return
+  fi
 
-# Create backup
-BACKUP_NAME="smdr-backup-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-
-if [ -f "$INSTALL_DIR/config/smdr-insight.sqlite" ]; then
-    cp "$INSTALL_DIR/config/smdr-insight.sqlite" "$BACKUP_DIR/$BACKUP_NAME.sqlite"
-    echo "Backup created: $BACKUP_DIR/$BACKUP_NAME.sqlite"
-fi
-
-# Cleanup old backups
-find "$BACKUP_DIR" -name "*.sqlite" -mtime +$RETENTION_DAYS -delete
-echo "Old backups cleaned up (retention: $RETENTION_DAYS days)"
-EOF
-
-    chmod +x "$INSTALL_DIR/scripts/backup.sh"
-    chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/scripts/backup.sh"
-}
-
-# Create backup cron job
-create_backup_cron() {
-    log_step "Creating backup cron job..."
-    
-    cat > "/etc/cron.d/$SERVICE_NAME-backup" << EOF
-# SMDR Insight - Daily backup at 3 AM
-0 3 * * * $SERVICE_USER $INSTALL_DIR/scripts/backup.sh >/dev/null 2>&1
-EOF
-
-    chmod 644 "/etc/cron.d/$SERVICE_NAME-backup"
-    log_info "Backup cron job created"
-}
-
-# Create logrotate configuration
-create_logrotate() {
-    log_step "Creating logrotate configuration..."
-    
-    cat > "/etc/logrotate.d/$SERVICE_NAME" << EOF
-/var/log/syslog {
-    daily
-    missingok
-    rotate 14
-    compress
-    delaycompress
-    notifempty
-    create 0640 $SERVICE_USER $SERVICE_USER
-    postrotate
-        systemctl reload $SERVICE_NAME > /dev/null 2>&1 || true
-    endscript
-}
-EOF
-
-    log_info "Logrotate configuration created"
-}
-
-# Enable and start service
-enable_service() {
-    log_step "Enabling and starting service..."
-    
-    systemctl daemon-reload
-    systemctl enable "$SERVICE_NAME"
-    systemctl start "$SERVICE_NAME"
-    
-    # Wait for service to start
-    sleep 3
-    
-    # Check status
-    if systemctl is-active --quiet "$SERVICE_NAME"; then
-        log_info "Service started successfully"
+  if ufw status | grep -q "Status: active"; then
+    if ! ufw status | grep -q "${PORT}/tcp"; then
+      ufw allow "${PORT}/tcp" comment "${APP_NAME} HTTPS"
+      log_info "Opened firewall port ${PORT}/tcp"
     else
-        log_error "Service failed to start"
-        systemctl status "$SERVICE_NAME" --no-pager
-        exit 1
+      log_info "Firewall already allows ${PORT}/tcp"
     fi
+  else
+    log_warn "ufw is not active; skipping port open."
+  fi
 }
 
-# Print installation summary
+enable_service() {
+  log_step "Enabling and starting service..."
+  systemctl daemon-reload
+  systemctl enable "$SERVICE_NAME"
+  systemctl restart "$SERVICE_NAME"
+  sleep 2
+
+  if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    log_error "Service failed to start."
+    journalctl -u "$SERVICE_NAME" --no-pager -n 80 || true
+    exit 1
+  fi
+}
+
 print_summary() {
-    echo ""
-    echo "========================================================"
-    log_info "SMDR Insight installed successfully!"
-    echo "========================================================"
-    echo ""
-    echo "  ✓ Service Status:     Running (auto-start enabled)"
-    echo "  ✓ Auto-Start:         Enabled on system boot"
-    echo "  Service Name:         $SERVICE_NAME"
-    echo "  Web Interface:        http://$(hostname -I | awk '{print $1}'):${PORT}"
-    echo "  Installation Dir:     $INSTALL_DIR"
-    echo "  Config Dir:           $INSTALL_DIR/config"
-    echo "  Backup Dir:           $BACKUP_DIR"
-    echo "  Log Dir:              $LOG_DIR"
-    echo ""
-    echo "  First Login:"
-    echo "    Username: admin"
-    echo "    Password: admin123!"
-    echo ""
-    echo "  Service Commands:"
-    echo "    sudo systemctl status $SERVICE_NAME"
-    echo "    sudo systemctl start $SERVICE_NAME"
-    echo "    sudo systemctl stop $SERVICE_NAME"
-    echo "    sudo systemctl restart $SERVICE_NAME"
-    echo ""
-    echo "  View Logs:"
-    echo "    sudo journalctl -u $SERVICE_NAME -f"
-    echo "    sudo journalctl -u $SERVICE_NAME --since today"
-    echo ""
-    echo "  Backup Commands:"
-    echo "    sudo $INSTALL_DIR/scripts/backup.sh"
-    echo "    ls -la $BACKUP_DIR"
-    echo ""
-    echo "  Security Reminders:"
-    echo "    1. Change default admin password immediately"
-    echo "    2. Configure MiVB controller IP in Settings"
-    echo "    3. Set SMDR_JWT_SECRET for production"
-    echo "    4. Regularly update: sudo apt update && sudo apt upgrade"
-    echo ""
-    echo "  ℹ️  The service will automatically start on system boot!"
-    echo "========================================================"
+  local host_ip
+  host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  if [[ -z "$host_ip" ]]; then
+    host_ip="SERVER_IP"
+  fi
+
+  echo ""
+  echo "========================================================"
+  log_info "${APP_NAME} installation completed."
+  echo "========================================================"
+  echo "Service:            ${SERVICE_NAME}"
+  echo "Install directory:  ${INSTALL_DIR}"
+  echo "Environment file:   ${ENV_FILE}"
+  echo "Web URL:            https://${host_ip}:${PORT}"
+  echo ""
+  echo "Useful commands:"
+  echo "  sudo systemctl status ${SERVICE_NAME}"
+  echo "  sudo systemctl restart ${SERVICE_NAME}"
+  echo "  sudo journalctl -u ${SERVICE_NAME} -f"
+  echo ""
+  echo "Next step (first login bootstrap):"
+  echo "  1) Edit ${ENV_FILE}"
+  echo "  2) Set SMDR_BOOTSTRAP_ADMIN_PASSWORD to a strong value"
+  echo "  3) sudo systemctl restart ${SERVICE_NAME}"
+  echo "========================================================"
 }
 
-# Main installation
 main() {
-    echo ""
-    echo "========================================================"
-    echo "  SMDR Insight - Production Installer"
-    echo "  Version: 2.1.0-web"
-    echo "  Headless Server Edition"
-    echo "========================================================"
-    echo ""
-    
-    check_root
-    detect_user
-    check_system
-    install_dependencies
-    configure_firewall
-    stop_existing_service
-    prepare_directory
-    build_application
-    configure_application
-    create_systemd_service
-    create_backup_script
-    create_backup_cron
-    create_logrotate
-    enable_service
-    print_summary
+  echo ""
+  echo "========================================================"
+  echo " ${APP_NAME} installer (Ubuntu/Debian)"
+  echo "========================================================"
+  echo ""
+
+  require_root
+  check_os
+  install_system_dependencies
+  ensure_node_24
+  ensure_service_user
+  prepare_source
+  build_application
+  ensure_runtime_config
+  configure_env_file
+  create_systemd_service
+  configure_firewall
+  enable_service
+  print_summary
 }
 
-# Run main installation
 main

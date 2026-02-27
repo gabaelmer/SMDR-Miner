@@ -1,6 +1,6 @@
 # SMDR Insight
 
-[![Build and Release](https://github.com/gabaelmer/Project-SMDR/actions/workflows/build.yml/badge.svg)](https://github.com/gabaelmer/Project-SMDR/actions/workflows/build.yml)
+[![Build and Release](https://github.com/gabaelmer/SMDR-Miner/actions/workflows/build.yml/badge.svg)](https://github.com/gabaelmer/SMDR-Miner/actions/workflows/build.yml)
 
 **SMDR Insight** is a modern, high-stability SMDR (Station Message Detail Recording) collector and analytics platform designed for MiVoice Business systems. It provides real-time call tracking, advanced security alerts, and a beautiful web-based dashboard for network-wide monitoring.
 
@@ -24,21 +24,26 @@
 Deploy SMDR Insight as a background service with a single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gabaelmer/Project-SMDR/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/gabaelmer/SMDR-Miner/main/install.sh | sudo bash
 ```
 
 The installer will:
-1. Detect your user account automatically (or run as root)
-2. Install all system dependencies (Node.js 20, build tools)
-3. Clone and build the project natively on your server
-4. Rebuild native modules for your specific Node.js version
-5. Configure and start a managed systemd service
+1. Install all required dependencies and tools (Node.js 24, npm, git, build-essential, OpenSSL, etc.)
+2. Clone/update this repository in `/opt/smdr-insight`
+3. Build frontend + backend and rebuild native modules
+4. Create a production `systemd` service (`smdr-insight`)
+5. Start HTTPS service on port `61593` and optionally open firewall port in `ufw`
 
 After installation, the app is instantly available at:
 `https://your-server-ip:61593`
 
+Installer options example:
+```bash
+curl -fsSL https://raw.githubusercontent.com/gabaelmer/SMDR-Miner/main/install.sh | sudo bash -s -- --port 61593 --repo-ref main
+```
+
 > [!TIP]
-> **First Login Bootstrap**: Set `SMDR_BOOTSTRAP_ADMIN_PASSWORD` (and optionally `SMDR_BOOTSTRAP_ADMIN_USERNAME`) before first start.
+> **First Login Bootstrap**: Set `SMDR_BOOTSTRAP_ADMIN_PASSWORD` (and optionally `SMDR_BOOTSTRAP_ADMIN_USERNAME`) in `/etc/default/smdr-insight`, then restart service.
 
 ---
 
@@ -75,8 +80,8 @@ sudo systemctl restart smdr-insight
 
 ### Setup
 ```bash
-git clone https://github.com/gabaelmer/Project-SMDR.git
-cd Project-SMDR
+git clone https://github.com/gabaelmer/SMDR-Miner.git
+cd SMDR-Miner
 npm install
 npm run build
 ```
