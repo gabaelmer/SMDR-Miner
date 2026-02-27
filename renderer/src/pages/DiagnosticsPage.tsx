@@ -657,34 +657,46 @@ export function DiagnosticsPage() {
 
       <div className="card p-2.5">
         <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text)' }}>Quick Stats</h2>
-        <div className="grid gap-2 md:grid-cols-4">
+        <div className="grid gap-1.5 md:grid-cols-4">
           <div
-            className="p-3 rounded-xl border flex flex-col min-h-[126px]"
+            className="p-3 rounded-xl border min-h-[116px]"
             style={{ background: 'rgba(36, 132, 235, 0.1)', borderColor: 'var(--border)' }}
           >
             <p className="text-sm" style={{ color: 'var(--muted)' }}>Total Calls Today</p>
             <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--brand)' }}>{dashboard.totalCallsToday}</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+              Last refresh: {formatTimestamp(lastDashboardRefreshAt ?? undefined)}
+            </p>
           </div>
           <div
-            className="p-3 rounded-xl border flex flex-col min-h-[126px]"
+            className="p-3 rounded-xl border min-h-[116px]"
             style={{ background: 'rgba(36, 132, 235, 0.1)', borderColor: 'var(--border)' }}
           >
             <p className="text-sm" style={{ color: 'var(--muted)' }}>Incoming</p>
             <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--brand)' }}>{dashboard.incomingCalls}</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+              Last refresh: {formatTimestamp(lastDashboardRefreshAt ?? undefined)}
+            </p>
           </div>
           <div
-            className="p-3 rounded-xl border flex flex-col min-h-[126px]"
+            className="p-3 rounded-xl border min-h-[116px]"
             style={{ background: 'rgba(38, 182, 127, 0.1)', borderColor: 'var(--border)' }}
           >
             <p className="text-sm" style={{ color: 'var(--muted)' }}>Outgoing</p>
             <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--green)' }}>{dashboard.outgoingCalls}</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+              Last refresh: {formatTimestamp(lastDashboardRefreshAt ?? undefined)}
+            </p>
           </div>
           <div
-            className="p-3 rounded-xl border flex flex-col min-h-[126px]"
+            className="p-3 rounded-xl border min-h-[116px]"
             style={{ background: 'rgba(139, 92, 246, 0.1)', borderColor: 'var(--border)' }}
           >
             <p className="text-sm" style={{ color: 'var(--muted)' }}>Parse Errors</p>
             <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--purple)' }}>{parseErrors.length}</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+              Last refresh: {formatTimestamp(lastParseErrorsRefreshAt ?? undefined)}
+            </p>
           </div>
         </div>
       </div>
