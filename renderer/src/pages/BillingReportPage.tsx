@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CATEGORY_ORDER, CAT_BG, CAT_BORDER, CAT_COLOR, EXPORT_TOP_CALL_LIMITS } from './billing-report/constants';
 import { BillingReportFilters } from './billing-report/BillingReportFilters';
 import { DailyTrendChart } from './billing-report/DailyTrendChart';
@@ -8,8 +8,62 @@ import { formatTotalsByCurrency, fmtCur, fmtDur, toLabel } from './billing-repor
 import { useBillingReportData } from './billing-report/useBillingReportData';
 import { api } from '../lib/api';
 
+function buildCsvRows(data: ReturnType<typeof useBillingReportData>['data']): string {
+  if (!data) return '';
+  const rows: string[][] = [];
+
+  rows.push(['=== BILLING REPORT ===']);
+  rows.push([]);
+  rows.push(['Category', 'Calls', 'Duration (s)', 'Total Cost', 'Avg Cost', 'Max Cost', 'Currency']);
+  for (const row of data.summary) {
+    rows.push([
+      row.call_category,
+      String(row.call_count),
+      String(row.total_duration_secs),
+      String(row.total_cost),
+      String(row.avg_cost),
+      String(row.max_cost),
+      row.currency
+    ]);
+  }
+
+  rows.push([]);
+  rows.push(['=== TOP COST CALLS ===']);
+  rows.push(['Date', 'Start Time', 'Calling Party', 'Called Party', 'Digits Dialed', 'Category', 'Duration (s)', 'Rate/min', 'Cost', 'Tax', 'Currency']);
+  for (const call of data.topCostCalls) {
+    rows.push([
+      call.date,
+      call.start_time,
+      call.calling_party,
+      call.called_party,
+      call.digits_dialed || '',
+      call.call_category,
+      String(call.duration_seconds),
+      String(call.rate_per_minute),
+      String(call.call_cost),
+      String(call.tax_amount),
+      call.bill_currency
+    ]);
+  }
+
+  return rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+}
+
+function download(name: string, content: BlobPart, type: string): void {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export function BillingReportPage() {
   const [exporting, setExporting] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [exportTopCallsLimit, setExportTopCallsLimit] = useState<number>(1000);
 
@@ -101,6 +155,43 @@ export function BillingReportPage() {
     }
   };
 
+  const exportCsv = () => {
+    if (!data) {
+      showToast('error', 'Export failed', 'No billing data available');
+      return;
+    }
+    setExportingCsv(true);
+    try {
+      const csv = buildCsvRows(data);
+      const filename = `billing-report-${appliedFilters.from}-to-${appliedFilters.to}.csv`;
+      download(filename, csv, 'text/csv');
+      showToast('success', 'CSV Exported', filename);
+    } catch {
+      showToast('error', 'Export failed', 'Could not generate CSV');
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
+  // Top spenders by extension derived from top cost calls
+  const topSpenders = useMemo(() => {
+    if (!data?.topCostCalls) return [];
+    const map = new Map<string, { calls: number; cost: number; currency: string }>();
+    for (const call of data.topCostCalls) {
+      const key = call.calling_party || '—';
+      const existing = map.get(key) ?? { calls: 0, cost: 0, currency: call.bill_currency };
+      existing.calls += 1;
+      existing.cost += call.call_cost;
+      map.set(key, existing);
+    }
+    return Array.from(map.entries())
+      .map(([ext, v]) => ({ ext, ...v }))
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, 10);
+  }, [data?.topCostCalls]);
+
+  const avgCostPerCall = grandCalls > 0 ? totalCostNumeric / grandCalls : 0;
+
   const blockingError = !loading && !data && !!error;
 
   return (
@@ -116,8 +207,10 @@ export function BillingReportPage() {
         setCategory={setCategory}
         onApply={applyFilters}
         onExport={exportPDF}
+        onExportCsv={exportCsv}
         loading={loading}
         exporting={exporting}
+        exportingCsv={exportingCsv}
         hasData={!!data}
         exportTopCallsLimit={exportTopCallsLimit}
         setExportTopCallsLimit={setExportTopCallsLimit}
@@ -174,20 +267,20 @@ export function BillingReportPage() {
           <div className="card p-8 text-center text-sm" style={{ color: 'var(--muted)' }}>Loading...</div>
         ) : (
           data && (
-            <div className="grid gap-1.5 min-h-0 h-full xl:grid-cols-12 xl:grid-rows-[auto_auto_minmax(0,1fr)]">
-              <div className="card p-4 rounded-2xl xl:col-span-3" style={{ background: 'var(--surface-alt)', borderColor: 'var(--brand)', borderWidth: '1px' }}>
+            <div className="grid gap-1.5 min-h-0 h-full xl:grid-cols-12 xl:grid-rows-[auto_auto_auto_minmax(0,1fr)]">
+              {/* Row 1: KPI cards */}
+              <div className="card p-4 rounded-2xl xl:col-span-2" style={{ background: 'var(--surface-alt)', borderColor: 'var(--brand)', borderWidth: '1px' }}>
                 <div className="text-center mb-2">
-                  <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Total Call Charges</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Total Charges</p>
                   <p className="text-2xl md:text-3xl font-bold mt-1.5" style={{ color: 'var(--brand)' }}>
                     {categoryMetrics.primaryCurrency
                       ? fmtCur(totalCostNumeric, categoryMetrics.primaryCurrency)
-                      : 'Multiple currencies'}
+                      : 'Multi-currency'}
                   </p>
                   {!categoryMetrics.primaryCurrency && (
                     <p className="text-xs mt-1.5" style={{ color: 'var(--muted)' }}>{formatTotalsByCurrency(categoryMetrics.totalsByCurrency)}</p>
                   )}
                 </div>
-
                 <div className="grid grid-cols-2 gap-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
                   <div className="text-center">
                     <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>{grandCalls.toLocaleString()}</p>
@@ -200,7 +293,21 @@ export function BillingReportPage() {
                 </div>
               </div>
 
-              <div className="min-h-0 xl:col-span-9">
+              {/* Avg cost per call KPI */}
+              <div className="card p-4 rounded-2xl xl:col-span-2" style={{ background: 'var(--surface-alt)' }}>
+                <div className="text-center">
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Avg Cost / Call</p>
+                  <p className="text-2xl font-bold mt-2" style={{ color: grandCalls > 0 ? '#f59e0b' : 'var(--muted)' }}>
+                    {grandCalls > 0
+                      ? (categoryMetrics.primaryCurrency ? fmtCur(avgCostPerCall, categoryMetrics.primaryCurrency) : `${avgCostPerCall.toFixed(2)}`)
+                      : '—'}
+                  </p>
+                  <p className="text-xs mt-2" style={{ color: 'var(--muted2)' }}>across {grandCalls.toLocaleString()} calls</p>
+                </div>
+              </div>
+
+              {/* Daily trend chart */}
+              <div className="min-h-0 xl:col-span-8">
                 <DailyTrendChart
                   trendData={trendModel.trendData}
                   trendCurrencies={trendModel.trendCurrencies}
@@ -209,6 +316,7 @@ export function BillingReportPage() {
                 />
               </div>
 
+              {/* Row 2: Category breakdown */}
               <div className="card p-3 xl:col-span-4">
                 <div className="flex flex-wrap gap-2 justify-between items-center mb-2">
                   <p className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
@@ -231,12 +339,8 @@ export function BillingReportPage() {
                     const bucket = categoryMetrics.byCategory.get(cat);
                     const categoryCost = bucket ? bucket.totalCost : 0;
                     const categoryCalls = bucket ? bucket.callCount : 0;
-                    const value = categoryMetrics.primaryCurrency
-                      ? categoryCost
-                      : categoryCalls;
-                    const total = categoryMetrics.primaryCurrency
-                      ? totalCostNumeric
-                      : Math.max(1, grandCalls);
+                    const value = categoryMetrics.primaryCurrency ? categoryCost : categoryCalls;
+                    const total = categoryMetrics.primaryCurrency ? totalCostNumeric : Math.max(1, grandCalls);
                     return (
                       <div
                         key={cat}
@@ -272,7 +376,39 @@ export function BillingReportPage() {
                 })}
               </div>
 
-              <div className="min-h-0 xl:col-span-12">
+              {/* Row 3: Top Spenders + Top Cost Calls Table */}
+              {topSpenders.length > 0 && (
+                <div className="card p-3 xl:col-span-3 min-h-0 overflow-hidden flex flex-col">
+                  <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>
+                    Top Spenders by Extension
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px', fontSize: '9px', color: 'var(--muted2)', fontWeight: 600, textTransform: 'uppercase' }}>
+                    <div>Extension</div>
+                    <div style={{ textAlign: 'right' }}>Calls / Cost</div>
+                  </div>
+                  <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
+                    {topSpenders.map((s, i) => {
+                      const maxCost = topSpenders[0].cost || 1;
+                      const pct = Math.round((s.cost / maxCost) * 100);
+                      return (
+                        <div key={s.ext} className="erow" style={{ padding: '6px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 10, color: 'var(--muted2)', minWidth: 16 }}>{i + 1}</span>
+                          <span className="mono" style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600, width: 44 }}>{s.ext}</span>
+                          <div className="etrk" style={{ flex: 1 }}>
+                            <div className="efil" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, var(--brand), var(--purple))' }}></div>
+                          </div>
+                          <div style={{ fontSize: 10, textAlign: 'right', minWidth: 96 }}>
+                            <div style={{ color: 'var(--muted2)' }}>{s.calls} calls</div>
+                            <div style={{ color: 'var(--brand)', fontWeight: 700 }}>{fmtCur(s.cost, s.currency)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className={`min-h-0 xl:col-span-${topSpenders.length > 0 ? 9 : 12}`}>
                 <TopCostCallsTable
                   topCostCalls={data.topCostCalls}
                   topCallsTotal={topCallsTotal}

@@ -352,18 +352,35 @@ export function AnalyticsPage() {
               <ResponsiveContainer>
                 <PieChart>
                   <Tooltip
-                    formatter={(value: number, _name: string, payload: unknown) => {
-                      const total = transferChartData.reduce((sum, item) => sum + item.count, 0);
-                      const numericValue = Number(value) || 0;
-                      const pct = safePercent(numericValue, total);
-                      const label =
-                        typeof payload === 'object' &&
-                        payload !== null &&
-                        'payload' in payload &&
-                        typeof (payload as { payload?: { label?: string } }).payload?.label === 'string'
-                          ? (payload as { payload: { label: string } }).payload.label
-                          : 'Transfer/Conference';
-                      return [`${numericValue} calls (${pct}%)`, label];
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        const sliceColor = payload[0].color || TRANSFER_COLORS[data.label] || '#2484eb';
+
+                        const total = transferChartData.reduce((sum, item) => sum + item.count, 0);
+                        const pct = safePercent(data.count, total);
+
+                        return (
+                          <div
+                            style={{
+                              background: '#001228',
+                              border: `1px solid ${sliceColor}`,
+                              borderRadius: '12px',
+                              boxShadow: `0 0 16px ${sliceColor}88`,
+                              padding: '8px 12px',
+                              color: sliceColor,
+                              fontWeight: 700,
+                              fontSize: '13px'
+                            }}
+                          >
+                            <p style={{ margin: 0, fontWeight: 800 }}>{data.label || 'Transfer/Conference'}</p>
+                            <p style={{ margin: '4px 0 0 0', color: '#fff' }}>
+                              {data.count} calls ({pct}%)
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
                     }}
                   />
                   <Pie
