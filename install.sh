@@ -270,13 +270,19 @@ configure_env_file() {
     log_info "Generated new SMDR_JWT_SECRET"
   fi
 
-  if ! grep -q "^# Optional bootstrap admin credentials" "$ENV_FILE"; then
-    cat >> "$ENV_FILE" <<'EOF'
+  if ! grep -q "^SMDR_BOOTSTRAP_ADMIN_PASSWORD=" "$ENV_FILE"; then
+    local boot_pass
+    boot_pass="$(openssl rand -base64 12 | tr -d '=+/' | cut -c1-16)"
+    
+    # We still allow the user to see this comment for context
+    cat >> "$ENV_FILE" <<EOF
 
-# Optional bootstrap admin credentials (used only when no users exist)
-# SMDR_BOOTSTRAP_ADMIN_USERNAME=admin
-# SMDR_BOOTSTRAP_ADMIN_PASSWORD=CHANGE_THIS_TO_A_STRONG_PASSWORD
+# Bootstrap admin credentials (used only when no users exist)
+SMDR_BOOTSTRAP_ADMIN_USERNAME=admin
+SMDR_BOOTSTRAP_ADMIN_PASSWORD=${boot_pass}
 EOF
+    # Export it for print_summary
+    export GENERATED_ADMIN_PASS="$boot_pass"
   fi
 }
 
@@ -368,15 +374,19 @@ print_summary() {
   echo "Environment file:   ${ENV_FILE}"
   echo "Web URL:            https://${host_ip}:${PORT}"
   echo ""
+  
+  if [[ -n "${GENERATED_ADMIN_PASS:-}" ]]; then
+    echo -e "${YELLOW}IMPORTANT: Initial Admin Credentials${NC}"
+    echo "  Username: admin"
+    echo "  Password: ${GENERATED_ADMIN_PASS}"
+    echo "  (Please log in and change this password immediately!)"
+    echo ""
+  fi
+
   echo "Useful commands:"
   echo "  sudo systemctl status ${SERVICE_NAME}"
   echo "  sudo systemctl restart ${SERVICE_NAME}"
   echo "  sudo journalctl -u ${SERVICE_NAME} -f"
-  echo ""
-  echo "Next step (first login bootstrap):"
-  echo "  1) Edit ${ENV_FILE}"
-  echo "  2) Set SMDR_BOOTSTRAP_ADMIN_PASSWORD to a strong value"
-  echo "  3) sudo systemctl restart ${SERVICE_NAME}"
   echo "========================================================"
 }
 
