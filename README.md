@@ -43,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/gabaelmer/SMDR-Miner/main/install.s
 ```
 
 > [!TIP]
-> **First Login Bootstrap**: Set `SMDR_BOOTSTRAP_ADMIN_PASSWORD` (and optionally `SMDR_BOOTSTRAP_ADMIN_USERNAME`) in `/etc/default/smdr-insight`, then restart service.
+> **First Login Bootstrap**: By default, the installer automatically generates a secure `SMDR_BOOTSTRAP_ADMIN_PASSWORD` and prints it at the end of the installation logs. Use `admin` and this password to log in for the first time, and then change it immediately! If you missed the password, you can check `/etc/default/smdr-insight`.
 
 ---
 
@@ -99,7 +99,7 @@ npm run build
 | Web UI not accessible | Open port 61593: `sudo ufw allow 61593/tcp` |
 | `SQLITE_CANTOPEN` error | Permission issue — re-run `install.sh` to reset ownership |
 | Settings not saving | Check write permissions on `/opt/smdr-insight/config/` |
-| Can't log in on first start | Ensure `SMDR_BOOTSTRAP_ADMIN_PASSWORD` is set before bootstrapping |
+| Can't log in on first start | Check the installation log or `/etc/default/smdr-insight` for `SMDR_BOOTSTRAP_ADMIN_PASSWORD` |
 | Connection drops | Check `journalctl` for TCP errors; verify PBX is reachable on port 1752 |
 | Port 61593 conflict | Another service is using port 61593 — set `SMDR_PORT` to another value |
 
