@@ -1,7 +1,7 @@
 {
   "connection": {
     "controllerIps": [
-      "192.168.0.52"
+      "127.0.0.1"
     ],
     "port": 1752,
     "concurrentConnections": 1,
@@ -12,9 +12,9 @@
     "ipWhitelist": []
   },
   "storage": {
-    "dbPath": "/home/elmer/Documents/AppDev/Project-SMDR-billing/config/smdr-insight.sqlite",
+    "dbPath": "./config/smdr-insight.sqlite",
     "retentionDays": 60,
-    "archiveDirectory": "/home/elmer/Documents/AppDev/Project-SMDR-billing/config/archive"
+    "archiveDirectory": "./config/archive"
   },
   "alerts": {
     "longCallMinutes": 30,

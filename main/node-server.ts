@@ -103,23 +103,33 @@ function persistConfigSafely(nextConfig: AppConfig): void {
 
 function loadConfig(): AppConfig {
     const defaultConfig = buildDefaultConfig(configDir);
+    let loadedConfig = defaultConfig;
     const primaryData = readJsonObject(configPath);
     if (primaryData) {
         console.log('[NodeServer] Config loaded from:', configPath);
         console.log('[NodeServer] MiVB IPs:', (primaryData.connection as any)?.controllerIps || 'not set');
         console.log('[NodeServer] MiVB Port:', (primaryData.connection as any)?.port || 1752);
-        return mergeWithDefaults(defaultConfig, primaryData);
+        loadedConfig = mergeWithDefaults(defaultConfig, primaryData);
+    } else {
+        const backupData = readJsonObject(configBackupPath);
+        if (backupData) {
+            console.log('[NodeServer] Primary config unavailable. Loaded backup config:', configBackupPath);
+            loadedConfig = mergeWithDefaults(defaultConfig, backupData);
+        } else {
+            console.log('[NodeServer] Config file not found, using defaults');
+            console.log('[NodeServer] Run: npx tsx scripts/configure.ts configure');
+        }
     }
 
-    const backupData = readJsonObject(configBackupPath);
-    if (backupData) {
-        console.log('[NodeServer] Primary config unavailable. Loaded backup config:', configBackupPath);
-        return mergeWithDefaults(defaultConfig, backupData);
+    // Always prefer environment variables if set (useful for systemd service overrides)
+    if (process.env.SMDR_DB_PATH) {
+        loadedConfig.storage.dbPath = process.env.SMDR_DB_PATH;
+    }
+    if (process.env.SMDR_ARCHIVE_DIR) {
+        loadedConfig.storage.archiveDirectory = process.env.SMDR_ARCHIVE_DIR;
     }
 
-    console.log('[NodeServer] Config file not found, using defaults');
-    console.log('[NodeServer] Run: npx tsx scripts/configure.ts configure');
-    return defaultConfig;
+    return loadedConfig;
 }
 
 const config = loadConfig();

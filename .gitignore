@@ -9,3 +9,6 @@ config/*.sqlite-*
 config/*.db
 config/archive/*.csv
 config/config-history/
+config/settings*.json
+!config/settings.json.example
+config/billing*.json
