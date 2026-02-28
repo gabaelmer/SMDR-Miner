@@ -263,6 +263,13 @@ configure_env_file() {
   set_env_value "SMDR_DB_PATH" "$INSTALL_DIR/config/smdr-insight.sqlite"
   set_env_value "SMDR_TLS_CN" "$(hostname -f 2>/dev/null || hostname)"
 
+  if ! grep -qE "^SMDR_JWT_SECRET=" "$ENV_FILE" 2>/dev/null; then
+    local secret
+    secret="$(openssl rand -hex 32)"
+    echo "SMDR_JWT_SECRET=${secret}" >> "$ENV_FILE"
+    log_info "Generated new SMDR_JWT_SECRET"
+  fi
+
   if ! grep -q "^# Optional bootstrap admin credentials" "$ENV_FILE"; then
     cat >> "$ENV_FILE" <<'EOF'
 
