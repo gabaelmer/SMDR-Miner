@@ -42,8 +42,8 @@ export function BillingReportFilters({
   exportLimitOptions
 }: BillingReportFiltersProps) {
   return (
-    <div className="card p-4 flex flex-wrap gap-3 items-end justify-between">
-      <div className="flex flex-wrap gap-3 items-end">
+    <div className="card p-3 flex flex-wrap gap-2 items-end justify-between">
+      <div className="flex flex-wrap gap-2 items-end">
         <label className="text-xs" style={{ color: 'var(--text)' }}>
           From
           <input

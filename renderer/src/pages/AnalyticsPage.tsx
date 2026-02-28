@@ -191,9 +191,9 @@ export function AnalyticsPage() {
   };
 
   return (
-    <div ref={rootRef} className="space-y-4">
-      <div className="card p-4">
-        <div className="grid gap-3 md:grid-cols-12" style={{ alignItems: 'end' }}>
+    <div ref={rootRef} className="h-[calc(100vh-148px)] min-h-0 overflow-auto xl:overflow-hidden flex flex-col gap-1.5">
+      <div className="card p-3 shrink-0">
+        <div className="grid gap-2 md:grid-cols-12" style={{ alignItems: 'end' }}>
           <div className="md:col-span-2">
             <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Preset</p>
             <select
@@ -256,12 +256,12 @@ export function AnalyticsPage() {
             </button>
           </div>
         </div>
-        <p style={{ marginTop: '8px', fontSize: '11px', color: 'var(--muted2)' }}>
+        <p style={{ marginTop: '6px', fontSize: '11px', color: 'var(--muted2)' }}>
           {loadingCurrent ? 'Refreshing analytics…' : `Range: ${startDate} to ${endDate}`}
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-2 md:grid-cols-5 shrink-0">
         {[
           {
             label: 'Total Calls',
@@ -289,7 +289,7 @@ export function AnalyticsPage() {
             delta: deltaBadge(summary.transferConferenceRate, compareSummary?.transferConferenceRate)
           }
         ].map((card) => (
-          <div key={card.label} className="card p-3">
+          <div key={card.label} className="card p-2.5">
             <p className="text-xs" style={{ color: 'var(--muted2)' }}>{card.label}</p>
             <p style={{ marginTop: '4px', fontSize: '20px', fontWeight: 800, color: 'var(--text)' }}>{card.value}</p>
             <p style={{ marginTop: '4px', fontSize: '11px', color: card.delta?.color ?? 'var(--muted2)' }}>
@@ -299,12 +299,12 @@ export function AnalyticsPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="card p-4">
+      <div className="grid gap-1.5 min-h-0 flex-1 xl:grid-cols-12 xl:grid-rows-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="card p-3 min-h-0 overflow-hidden flex flex-col xl:col-span-6 xl:row-start-1">
           <p className="mb-3 text-sm font-semibold" style={{ color: 'var(--text)' }}>
             Call Volume Per Hour (click a point to drill down)
           </p>
-          <div className="h-64">
+          <div className="flex-1 min-h-[170px]">
             <ResponsiveContainer>
               <AreaChart
                 data={analytics.volumeByHour}
@@ -339,11 +339,11 @@ export function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="card p-4 xl:row-span-2 xl:flex xl:h-full xl:flex-col">
+        <div className="card p-3 min-h-0 overflow-hidden flex flex-col xl:col-start-10 xl:col-span-3 xl:row-start-1 xl:row-span-2">
           <p className="mb-3 text-sm font-semibold" style={{ color: 'var(--text)' }}>
             Transfer/Conference Distribution (click a slice to drill down)
           </p>
-          <div className="h-64 xl:min-h-0 xl:flex-1">
+          <div className="flex-1 min-h-[170px]">
             {transferChartData.length === 0 ? (
               <p style={{ fontSize: '11px', color: 'var(--muted2)', textAlign: 'center', paddingTop: '84px' }}>
                 No transfer or conference calls in selected range
@@ -399,7 +399,7 @@ export function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="card p-4">
+        <div className="card p-3 min-h-0 overflow-hidden flex flex-col xl:col-start-7 xl:col-span-3 xl:row-start-1">
           <p className="mb-3 text-sm font-semibold" style={{ color: 'var(--text)' }}>
             Average Call Duration by Extension
           </p>
@@ -407,7 +407,7 @@ export function AnalyticsPage() {
             <div>Extension</div>
             <div style={{ textAlign: 'right' }}>Duration / Calls</div>
           </div>
-          <div style={{ maxHeight: '480px', overflowY: 'auto', paddingRight: '4px' }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px' }}>
             {(() => {
               const rows = [...analytics.extensionUsage].sort((a, b) => {
                 if (b.avgHandleTime === a.avgHandleTime) return b.calls - a.calls;
@@ -440,21 +440,21 @@ export function AnalyticsPage() {
             )}
           </div>
         </div>
-      </div>
 
-      <Heatmap
-        data={analytics.heatmap}
-        onCellClick={(cell) => {
-          openCallLog({
-            dateFrom: cell.day,
-            dateTo: cell.day,
-            hour: String(cell.hour).padStart(2, '0')
-          });
-        }}
-      />
+        <div className="min-h-0 xl:col-span-9 xl:row-start-2">
+          <Heatmap
+            data={analytics.heatmap}
+            onCellClick={(cell) => {
+              openCallLog({
+                dateFrom: cell.day,
+                dateTo: cell.day,
+                hour: String(cell.hour).padStart(2, '0')
+              });
+            }}
+          />
+        </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="card p-4">
+        <div className="card p-3 min-h-0 overflow-hidden flex flex-col xl:col-span-6 xl:row-start-3">
           <p className="mb-3 text-sm font-semibold" style={{ color: 'var(--text)' }}>
             Extension Usage (click row to drill down)
           </p>
@@ -462,7 +462,7 @@ export function AnalyticsPage() {
             <div>Extension</div>
             <div style={{ textAlign: 'right' }}>Calls / Duration</div>
           </div>
-          <div style={{ maxHeight: '340px', overflowY: 'auto', paddingRight: '4px' }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px' }}>
             {analytics.extensionUsage.slice(0, 10).map((ext) => {
               const maxCalls = analytics.extensionUsage[0]?.calls || 1;
               const pct = Math.round((ext.calls / maxCalls) * 100);
@@ -490,11 +490,11 @@ export function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="card p-4">
+        <div className="card p-3 min-h-0 overflow-hidden flex flex-col xl:col-start-7 xl:col-span-6 xl:row-start-3">
           <p className="mb-3 text-sm font-semibold" style={{ color: 'var(--text)' }}>
             Correlation Anomalies (grouped and scored)
           </p>
-          <div className="space-y-2" style={{ maxHeight: '340px', overflowY: 'auto', paddingRight: '4px' }}>
+          <div className="space-y-2" style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px' }}>
             {analytics.correlations.slice(0, 30).map((item) => (
               <button
                 key={item.key}

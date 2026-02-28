@@ -162,9 +162,9 @@ export function CallLogPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="card p-4">
-        <div className="grid gap-3 md:grid-cols-12">
+    <div className="h-[calc(100vh-148px)] min-h-0 overflow-hidden flex flex-col gap-1.5">
+      <div className="card p-3 shrink-0 max-h-[34vh] overflow-auto">
+        <div className="grid gap-2 md:grid-cols-12">
           <div className="md:col-span-2">
             <label className="text-xs" style={{ color: 'var(--text)', display: 'block', marginBottom: '4px' }}>From:</label>
             <input
@@ -258,7 +258,7 @@ export function CallLogPage() {
           </div>
         </div>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-12">
+        <div className="mt-2 grid gap-2 md:grid-cols-12">
           <div className="md:col-span-1">
             <label className="text-xs" style={{ color: 'var(--text)', display: 'block', marginBottom: '4px' }}>Hour:</label>
             <input
@@ -317,7 +317,7 @@ export function CallLogPage() {
         </div>
 
         {activeFilterChips.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             {activeFilterChips.map((chip) => (
               <button
                 key={chip.id}
@@ -337,8 +337,8 @@ export function CallLogPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div className="card p-4 flex flex-col justify-center" style={{ minHeight: '220px', position: 'relative' }}>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 shrink-0">
+        <div className="card p-3 flex flex-col justify-center" style={{ minHeight: '170px', position: 'relative' }}>
           <div style={{ position: 'absolute', top: '16px', left: '16px' }}>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--brand)' }}></div>
@@ -347,32 +347,32 @@ export function CallLogPage() {
               </span>
             </div>
           </div>
-          <div style={{ textAlign: 'center', marginTop: '20px' }}>
-            <p className="font-bold mb-2" style={{ color: 'var(--brand)', fontSize: '72px', lineHeight: 1 }}>
+          <div style={{ textAlign: 'center', marginTop: '16px' }}>
+            <p className="font-bold mb-2" style={{ color: 'var(--brand)', fontSize: '56px', lineHeight: 1 }}>
               {totalCalls.toLocaleString()}
             </p>
             <p className="text-xs" style={{ color: 'var(--muted2)' }}>
               from filtered result set
             </p>
           </div>
-          <div style={{ textAlign: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+          <div style={{ textAlign: 'center', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
               Total Talk Time
             </p>
-            <p className="font-bold" style={{ color: 'var(--green)', fontSize: '28px', lineHeight: 1, marginTop: '4px' }}>
+            <p className="font-bold" style={{ color: 'var(--green)', fontSize: '24px', lineHeight: 1, marginTop: '4px' }}>
               {totalTalkTime}
             </p>
           </div>
         </div>
 
-        <div className="card p-4 flex flex-col" style={{ minHeight: '220px' }}>
+        <div className="card p-3 flex flex-col" style={{ minHeight: '170px' }}>
           <div className="flex items-center gap-2 mb-3">
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--green)' }}></div>
             <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
               Top Extensions (Made)
             </span>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', maxHeight: '170px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', maxHeight: '120px' }}>
             {topExtensionsMade.map((ext, idx) => (
               <div key={ext.extension} className="flex justify-between items-center py-2" style={{ borderBottom: idx < topExtensionsMade.length - 1 ? '1px solid var(--border2)' : 'none' }}>
                 <span className="mono text-sm" style={{ color: 'var(--text)', fontWeight: 600 }}>{ext.extension}</span>
@@ -385,14 +385,14 @@ export function CallLogPage() {
           </div>
         </div>
 
-        <div className="card p-4 flex flex-col" style={{ minHeight: '220px' }}>
+        <div className="card p-3 flex flex-col" style={{ minHeight: '170px' }}>
           <div className="flex items-center gap-2 mb-3">
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--purple)' }}></div>
             <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
               Top Extensions (Received)
             </span>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', maxHeight: '170px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', maxHeight: '120px' }}>
             {topExtensionsReceived.map((ext, idx) => (
               <div key={ext.extension} className="flex justify-between items-center py-2" style={{ borderBottom: idx < topExtensionsReceived.length - 1 ? '1px solid var(--border2)' : 'none' }}>
                 <span className="mono text-sm" style={{ color: 'var(--text)', fontWeight: 600 }}>{ext.extension}</span>
@@ -405,7 +405,7 @@ export function CallLogPage() {
           </div>
         </div>
 
-        <div className="card p-4 flex flex-col justify-between" style={{ minHeight: '220px' }}>
+        <div className="card p-3 flex flex-col justify-between" style={{ minHeight: '170px' }}>
           <div>
             <span className="text-xs font-semibold uppercase tracking-wide mb-3 block" style={{ color: 'var(--muted)' }}>
               Export Data
@@ -438,14 +438,16 @@ export function CallLogPage() {
         </div>
       </div>
 
-      <CallLogTable
-        rows={records}
-        loading={recordsLoading}
-        totalRecords={recordsTotal}
-        onPaginationChange={handlePaginationChange}
-        initialPageSize={filters.limit ?? 50}
-        resetPaginationToken={paginationResetToken}
-      />
+      <div className="min-h-0 flex-1">
+        <CallLogTable
+          rows={records}
+          loading={recordsLoading}
+          totalRecords={recordsTotal}
+          onPaginationChange={handlePaginationChange}
+          initialPageSize={filters.limit ?? 50}
+          resetPaginationToken={paginationResetToken}
+        />
+      </div>
     </div>
   );
 }

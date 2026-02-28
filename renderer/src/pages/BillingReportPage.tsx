@@ -104,7 +104,7 @@ export function BillingReportPage() {
   const blockingError = !loading && !data && !!error;
 
   return (
-    <div className="space-y-4">
+    <div className="h-[calc(100vh-148px)] min-h-0 overflow-hidden flex flex-col gap-1.5">
       <BillingReportFilters
         from={from}
         to={to}
@@ -126,13 +126,13 @@ export function BillingReportPage() {
       />
 
       {isRefreshing && data && (
-        <div className="card p-2 text-xs" style={{ color: 'var(--muted2)' }}>
+        <div className="card p-2 text-xs shrink-0" style={{ color: 'var(--muted2)' }}>
           Refreshing report...
         </div>
       )}
 
       {blockingError && (
-        <div className="card p-5" style={{ borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.08)' }}>
+        <div className="card p-5 shrink-0" style={{ borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.08)' }}>
           <p className="text-sm font-semibold" style={{ color: '#fca5a5' }}>
             Failed to load billing report
           </p>
@@ -150,7 +150,7 @@ export function BillingReportPage() {
       )}
 
       {!blockingError && error && (
-        <div className="card p-3 flex items-center justify-between gap-3" style={{ borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.08)' }}>
+        <div className="card p-3 flex items-center justify-between gap-3 shrink-0" style={{ borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.08)' }}>
           <div className="min-w-0">
             <p className="text-sm" style={{ color: '#fca5a5' }}>{error}</p>
             {isStaleData && (
@@ -169,134 +169,140 @@ export function BillingReportPage() {
         </div>
       )}
 
-      {loading && !data ? (
-        <div className="card p-8 text-center text-sm" style={{ color: 'var(--muted)' }}>Loading...</div>
-      ) : (
-        data && (
-          <>
-            <div className="card p-5 rounded-2xl" style={{ background: 'var(--surface-alt)', borderColor: 'var(--brand)', borderWidth: '1px' }}>
-              <div className="text-center mb-3">
-                <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Total Call Charges</p>
-                <p className="text-3xl md:text-4xl font-bold mt-2" style={{ color: 'var(--brand)' }}>
-                  {categoryMetrics.primaryCurrency
-                    ? fmtCur(totalCostNumeric, categoryMetrics.primaryCurrency)
-                    : 'Multiple currencies'}
-                </p>
-                {!categoryMetrics.primaryCurrency && (
-                  <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>{formatTotalsByCurrency(categoryMetrics.totalsByCurrency)}</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
-                <div className="text-center">
-                  <p className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{grandCalls.toLocaleString()}</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--muted2)' }}>total calls</p>
+      <div className="min-h-0 flex-1 overflow-auto xl:overflow-hidden">
+        {loading && !data ? (
+          <div className="card p-8 text-center text-sm" style={{ color: 'var(--muted)' }}>Loading...</div>
+        ) : (
+          data && (
+            <div className="grid gap-1.5 min-h-0 h-full xl:grid-cols-12 xl:grid-rows-[auto_auto_minmax(0,1fr)]">
+              <div className="card p-4 rounded-2xl xl:col-span-3" style={{ background: 'var(--surface-alt)', borderColor: 'var(--brand)', borderWidth: '1px' }}>
+                <div className="text-center mb-2">
+                  <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Total Call Charges</p>
+                  <p className="text-2xl md:text-3xl font-bold mt-1.5" style={{ color: 'var(--brand)' }}>
+                    {categoryMetrics.primaryCurrency
+                      ? fmtCur(totalCostNumeric, categoryMetrics.primaryCurrency)
+                      : 'Multiple currencies'}
+                  </p>
+                  {!categoryMetrics.primaryCurrency && (
+                    <p className="text-xs mt-1.5" style={{ color: 'var(--muted)' }}>{formatTotalsByCurrency(categoryMetrics.totalsByCurrency)}</p>
+                  )}
                 </div>
-                <div className="text-center" style={{ borderLeft: '1px solid var(--border)' }}>
-                  <p className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{fmtDur(grandDuration)}</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--muted2)' }}>talk time</p>
-                </div>
-              </div>
-            </div>
 
-            <DailyTrendChart
-              trendData={trendModel.trendData}
-              trendCurrencies={trendModel.trendCurrencies}
-              from={appliedFilters.from}
-              to={appliedFilters.to}
-            />
-
-            <div className="card p-4">
-              <div className="flex flex-wrap gap-3 justify-between items-center mb-3">
-                <p className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
-                  {categoryMetrics.primaryCurrency ? 'Cost Breakdown' : 'Category Breakdown (by call volume)'}
-                </p>
-                <p className="text-xs" style={{ color: 'var(--muted2)' }}>
-                  {categoryMetrics.primaryCurrency ? 'Share of total cost' : 'Mixed currencies detected'}
-                </p>
-              </div>
-              <div className="flex gap-3 flex-wrap">
-                {CATEGORY_ORDER.map((cat) => (
-                  <div key={cat} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: CAT_COLOR[cat] }}></div>
-                    <span className="text-xs" style={{ color: 'var(--text)' }}>{toLabel(cat)}</span>
+                <div className="grid grid-cols-2 gap-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                  <div className="text-center">
+                    <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>{grandCalls.toLocaleString()}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--muted2)' }}>total calls</p>
                   </div>
-                ))}
+                  <div className="text-center" style={{ borderLeft: '1px solid var(--border)' }}>
+                    <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>{fmtDur(grandDuration)}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--muted2)' }}>talk time</p>
+                  </div>
+                </div>
               </div>
-              <div className="flex h-3 rounded-full overflow-hidden mt-3" style={{ background: 'var(--surface-alt)' }}>
+
+              <div className="min-h-0 xl:col-span-9">
+                <DailyTrendChart
+                  trendData={trendModel.trendData}
+                  trendCurrencies={trendModel.trendCurrencies}
+                  from={appliedFilters.from}
+                  to={appliedFilters.to}
+                />
+              </div>
+
+              <div className="card p-3 xl:col-span-4">
+                <div className="flex flex-wrap gap-2 justify-between items-center mb-2">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
+                    {categoryMetrics.primaryCurrency ? 'Cost Breakdown' : 'Category Breakdown (by call volume)'}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--muted2)' }}>
+                    {categoryMetrics.primaryCurrency ? 'Share of total cost' : 'Mixed currencies detected'}
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {CATEGORY_ORDER.map((cat) => (
+                    <div key={cat} className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CAT_COLOR[cat] }}></div>
+                      <span className="text-xs" style={{ color: 'var(--text)' }}>{toLabel(cat)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex h-3 rounded-full overflow-hidden mt-2.5" style={{ background: 'var(--surface-alt)' }}>
+                  {CATEGORY_ORDER.map((cat) => {
+                    const bucket = categoryMetrics.byCategory.get(cat);
+                    const categoryCost = bucket ? bucket.totalCost : 0;
+                    const categoryCalls = bucket ? bucket.callCount : 0;
+                    const value = categoryMetrics.primaryCurrency
+                      ? categoryCost
+                      : categoryCalls;
+                    const total = categoryMetrics.primaryCurrency
+                      ? totalCostNumeric
+                      : Math.max(1, grandCalls);
+                    return (
+                      <div
+                        key={cat}
+                        style={{ width: `${total > 0 ? (value / total) * 100 : 0}%`, background: CAT_COLOR[cat] }}
+                        title={`${toLabel(cat)}: ${categoryMetrics.primaryCurrency ? fmtCur(categoryCost, categoryMetrics.primaryCurrency) : `${categoryCalls.toLocaleString()} calls`}`}
+                      ></div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-1.5 xl:col-span-8">
                 {CATEGORY_ORDER.map((cat) => {
                   const bucket = categoryMetrics.byCategory.get(cat);
-                  const categoryCost = bucket ? bucket.totalCost : 0;
-                  const categoryCalls = bucket ? bucket.callCount : 0;
-                  const value = categoryMetrics.primaryCurrency
-                    ? categoryCost
-                    : categoryCalls;
-                  const total = categoryMetrics.primaryCurrency
-                    ? totalCostNumeric
-                    : Math.max(1, grandCalls);
+                  const callCount = bucket?.callCount ?? 0;
+                  const duration = bucket?.duration ?? 0;
+                  const costLabel = categoryMetrics.primaryCurrency
+                    ? fmtCur(bucket?.totalCost ?? 0, categoryMetrics.primaryCurrency)
+                    : formatTotalsByCurrency(bucket?.totalsByCurrency ?? new Map<string, number>());
                   return (
-                    <div
-                      key={cat}
-                      style={{ width: `${total > 0 ? (value / total) * 100 : 0}%`, background: CAT_COLOR[cat] }}
-                      title={`${toLabel(cat)}: ${categoryMetrics.primaryCurrency ? fmtCur(categoryCost, categoryMetrics.primaryCurrency) : `${categoryCalls.toLocaleString()} calls`}`}
-                    ></div>
+                    <div key={cat} className="card p-3" style={{ background: CAT_BG[cat], border: `1px solid ${CAT_BORDER[cat]}` }}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CAT_COLOR[cat] }}></div>
+                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: CAT_COLOR[cat] }}>
+                          {toLabel(cat)}
+                        </span>
+                      </div>
+                      <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>{callCount.toLocaleString()}</p>
+                      <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>{fmtDur(duration)} talk time</p>
+                      <p className="text-xs font-bold mt-1.5" style={{ color: CAT_COLOR[cat] }}>{costLabel}</p>
+                    </div>
                   );
                 })}
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              {CATEGORY_ORDER.map((cat) => {
-                const bucket = categoryMetrics.byCategory.get(cat);
-                const callCount = bucket?.callCount ?? 0;
-                const duration = bucket?.duration ?? 0;
-                const costLabel = categoryMetrics.primaryCurrency
-                  ? fmtCur(bucket?.totalCost ?? 0, categoryMetrics.primaryCurrency)
-                  : formatTotalsByCurrency(bucket?.totalsByCurrency ?? new Map<string, number>());
-                return (
-                  <div key={cat} className="card p-4" style={{ background: CAT_BG[cat], border: `1px solid ${CAT_BORDER[cat]}` }}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CAT_COLOR[cat] }}></div>
-                      <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: CAT_COLOR[cat] }}>
-                        {toLabel(cat)}
-                      </span>
-                    </div>
-                    <p className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{callCount.toLocaleString()}</p>
-                    <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>{fmtDur(duration)} talk time</p>
-                    <p className="text-xs font-bold mt-2" style={{ color: CAT_COLOR[cat] }}>{costLabel}</p>
-                  </div>
-                );
-              })}
+              <div className="min-h-0 xl:col-span-12">
+                <TopCostCallsTable
+                  topCostCalls={data.topCostCalls}
+                  topCallsTotal={topCallsTotal}
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  pageSize={pageSize}
+                  page={page}
+                  totalPages={totalPages}
+                  loading={loading}
+                  isRefreshing={isRefreshing}
+                  onSortByChange={(value) => {
+                    setPage(1);
+                    setSortBy(value);
+                  }}
+                  onSortDirToggle={() => {
+                    setPage(1);
+                    setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+                  }}
+                  onPageSizeChange={(size) => {
+                    setPage(1);
+                    setPageSize(size);
+                  }}
+                  onPrevPage={() => setPage((prev) => Math.max(1, prev - 1))}
+                  onNextPage={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                />
+              </div>
             </div>
-
-            <TopCostCallsTable
-              topCostCalls={data.topCostCalls}
-              topCallsTotal={topCallsTotal}
-              sortBy={sortBy}
-              sortDir={sortDir}
-              pageSize={pageSize}
-              page={page}
-              totalPages={totalPages}
-              loading={loading}
-              isRefreshing={isRefreshing}
-              onSortByChange={(value) => {
-                setPage(1);
-                setSortBy(value);
-              }}
-              onSortDirToggle={() => {
-                setPage(1);
-                setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-              }}
-              onPageSizeChange={(size) => {
-                setPage(1);
-                setPageSize(size);
-              }}
-              onPrevPage={() => setPage((prev) => Math.max(1, prev - 1))}
-              onNextPage={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-            />
-          </>
-        )
-      )}
+          )
+        )}
+      </div>
 
       <ReportToast toast={toast} />
     </div>

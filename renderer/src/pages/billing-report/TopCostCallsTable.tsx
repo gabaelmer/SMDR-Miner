@@ -36,8 +36,8 @@ export function TopCostCallsTable({
   onNextPage
 }: TopCostCallsTableProps) {
   return (
-    <div className="card overflow-hidden">
-      <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3" style={{ borderColor: 'var(--border)' }}>
+    <div className="card overflow-hidden h-full min-h-0 flex flex-col">
+      <div className="px-3 py-2 border-b flex flex-wrap items-center justify-between gap-2 shrink-0" style={{ borderColor: 'var(--border)' }}>
         <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
           Top Cost Calls ({topCallsTotal.toLocaleString()})
         </p>
@@ -80,7 +80,7 @@ export function TopCostCallsTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-auto min-h-0 flex-1">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
@@ -135,7 +135,7 @@ export function TopCostCallsTable({
         </table>
       </div>
 
-      <div className="px-4 py-3 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+      <div className="px-3 py-2 border-t flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border)' }}>
         <p className="text-xs" style={{ color: 'var(--muted2)' }}>
           Page {Math.min(page, totalPages)} of {totalPages}
         </p>

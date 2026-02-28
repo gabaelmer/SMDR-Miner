@@ -27,8 +27,8 @@ export function Heatmap({ data, onCellClick }: Props) {
   }, [data]);
 
   return (
-    <div className="card p-4">
-      <p className="mb-3 text-sm font-semibold" style={{ color: 'var(--text)' }}>
+    <div className="card p-3 min-h-0 overflow-hidden flex flex-col h-full">
+      <p className="mb-2 text-sm font-semibold" style={{ color: 'var(--text)' }}>
         Day/Hour Heatmap
       </p>
       <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(24, minmax(0, 1fr))' }}>
@@ -38,7 +38,7 @@ export function Heatmap({ data, onCellClick }: Props) {
           </span>
         ))}
       </div>
-      <div className="mt-2 space-y-2">
+      <div className="mt-2 space-y-2 min-h-0 overflow-auto pr-1">
         {dayOrder.map((day) => (
           <div key={day} className="grid grid-cols-[70px_1fr] items-center gap-2">
             <span className="text-xs" style={{ color: 'var(--muted)' }}>

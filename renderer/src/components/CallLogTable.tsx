@@ -290,8 +290,8 @@ export function CallLogTable({
   const pageCount = Math.max(table.getPageCount(), 1);
 
   return (
-    <div className="card" style={{ padding: '12px 14px', position: 'relative' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+    <div className="card h-full min-h-0 flex flex-col" style={{ padding: '12px 14px', position: 'relative' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px', maxHeight: '56px', overflowY: 'auto' }}>
         {table.getAllLeafColumns().map((column) => (
           <label
             key={column.id}
@@ -315,7 +315,7 @@ export function CallLogTable({
         ))}
       </div>
 
-      <div className="twrap">
+      <div className="twrap flex-1 min-h-0">
         <table>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -401,7 +401,7 @@ export function CallLogTable({
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
         <div style={{ fontSize: '11px', color: 'var(--muted2)' }}>
           Showing {table.getRowModel().rows.length} of {totalRecords ?? rows.length} records
         </div>
@@ -457,9 +457,11 @@ export function CallLogTable({
         <div
           className="rounded-2xl border p-3"
           style={{
-            marginTop: '12px',
+            marginTop: '10px',
             borderColor: 'var(--border)',
-            background: 'var(--surface-alt)'
+            background: 'var(--surface-alt)',
+            maxHeight: '180px',
+            overflowY: 'auto'
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>

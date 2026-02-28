@@ -193,8 +193,8 @@ input:focus, select:focus {
 /* Table */
 .twrap {
   overflow: auto;
-  max-height: calc(100vh - 550px);
-  min-height: 300px;
+  max-height: none;
+  min-height: 0;
   border-radius: 9px;
   border: 1px solid var(--border2);
   scrollbar-width: thin;

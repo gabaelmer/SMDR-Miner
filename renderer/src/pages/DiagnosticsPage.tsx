@@ -29,6 +29,7 @@ const DEFAULT_CONNECTION_EVENTS: ConnectionEventsPage = {
 
 const DEFAULT_EVENT_LOG_VIEWPORT_HEIGHT = 180;
 const EVENT_ROW_HEIGHT = 64;
+const EVENT_LOG_VISIBLE_ROWS = 3;
 const EVENT_ROW_OVERSCAN = 4;
 
 function formatTimestamp(value?: string): string {
@@ -840,7 +841,8 @@ export function DiagnosticsPage() {
 
           <div
             ref={eventLogViewportRef}
-            className="flex-1 min-h-0 overflow-auto rounded-xl bg-black/20"
+            className="min-h-0 overflow-auto rounded-xl bg-black/20"
+            style={{ height: EVENT_ROW_HEIGHT * EVENT_LOG_VISIBLE_ROWS }}
             onScroll={(e) => setEventLogScrollTop((e.currentTarget as HTMLDivElement).scrollTop)}
           >
             {filteredServiceEvents.length > 0 ? (

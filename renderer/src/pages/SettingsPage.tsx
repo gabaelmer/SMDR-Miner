@@ -392,31 +392,31 @@ export function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="card p-4">
+      <div className="card p-3">
         <p style={{ color: 'var(--muted)' }}>Loading configuration...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="h-[calc(100vh-148px)] min-h-0 overflow-hidden flex flex-col gap-2">
       {statusError && (
-        <div className="card p-4 bg-red-900/20 border border-red-700">
+        <div className="card p-3 bg-red-900/20 border border-red-700">
           <p className="text-sm font-semibold text-red-300">{statusError}</p>
         </div>
       )}
       {statusMessage && (
-        <div className="card p-4 bg-emerald-900/20 border border-emerald-700">
+        <div className="card p-3 bg-emerald-900/20 border border-emerald-700">
           <p className="text-sm font-semibold text-emerald-300">{statusMessage}</p>
         </div>
       )}
 
       {!authChecked ? (
-        <div className="card p-4">
+        <div className="card p-3">
           <p className="text-sm" style={{ color: 'var(--muted)' }}>Checking permissions...</p>
         </div>
       ) : !isAdmin ? (
-        <div className="card p-4 border border-amber-700 bg-amber-900/20">
+        <div className="card p-3 border border-amber-700 bg-amber-900/20">
           <p className="text-sm font-semibold text-amber-300">Read-only mode</p>
           <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
             You are not an administrator. Settings changes, stream control, and data purge are disabled.
@@ -425,7 +425,7 @@ export function SettingsPage() {
       ) : null}
 
       {hasUnsavedChanges && (
-        <div className="card p-4 border border-blue-700 bg-blue-900/20">
+        <div className="card p-3 border border-blue-700 bg-blue-900/20">
           <p className="text-sm font-semibold text-blue-300">Unsaved changes detected</p>
           <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
             Save or revert your changes before leaving this page.
@@ -433,7 +433,8 @@ export function SettingsPage() {
         </div>
       )}
 
-      <div className="card p-4">
+      <div className="grid gap-2 lg:grid-cols-2 min-h-0 flex-1 overflow-auto pr-1 content-start">
+      <div className="card p-3">
         <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Connection Settings</p>
         <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
           Configure PBX connectivity and failover behavior.
@@ -546,7 +547,7 @@ export function SettingsPage() {
         </fieldset>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-3">
         <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Storage & Runtime</p>
         <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
           Control data retention and in-memory buffer size.
@@ -579,7 +580,7 @@ export function SettingsPage() {
         </fieldset>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-3">
         <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Alert Rules</p>
         <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
           Tune thresholds used for alert generation.
@@ -663,9 +664,9 @@ export function SettingsPage() {
         </fieldset>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-3">
         <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Actions</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           <button
             className="rounded-2xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
             onClick={handleSave}
@@ -711,7 +712,7 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-3">
         <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Danger Zone</p>
         <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
           Records older than the selected threshold will be permanently deleted.
@@ -734,7 +735,7 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-3">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
             Recent Parse Errors
@@ -749,7 +750,7 @@ export function SettingsPage() {
           </button>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-[240px] overflow-auto pr-1">
           {parseErrors.slice(0, 10).map((error, index) => (
             <div key={`${error.createdAt ?? 'na'}-${index}`} className="rounded-2xl border p-3" style={{ borderColor: 'var(--border)' }}>
               <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
@@ -769,6 +770,7 @@ export function SettingsPage() {
             </p>
           ) : null}
         </div>
+      </div>
       </div>
 
       {showPurgeModal && (
