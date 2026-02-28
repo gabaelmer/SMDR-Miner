@@ -191,6 +191,9 @@ prepare_source() {
 
   mkdir -p "$(dirname "$INSTALL_DIR")"
 
+  # Prevent 'dubious ownership' errors when root updates a repository owned by the service user
+  git config --global --add safe.directory "$INSTALL_DIR" || true
+
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     log_info "Existing git checkout found. Updating to ${REPO_REF}..."
     chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
