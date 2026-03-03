@@ -95,7 +95,7 @@ export function TopCostCallsTable({
         <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
           Top Cost Calls ({topCallsTotal.toLocaleString()})
         </p>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <label className="text-xs" style={{ color: 'var(--muted2)' }}>
             Sort
             <select
@@ -109,13 +109,16 @@ export function TopCostCallsTable({
               <option value="date">Date</option>
             </select>
           </label>
-          <button
-            onClick={onSortDirToggle}
-            className="rounded-lg border px-2 py-1 text-xs font-semibold"
-            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-          >
-            {sortDir === 'desc' ? '↓ Desc' : '↑ Asc'}
-          </button>
+          <div className="flex flex-col">
+            <span className="text-xs select-none invisible">Direction</span>
+            <button
+              onClick={onSortDirToggle}
+              className="h-[30px] rounded-lg border px-2 text-xs font-semibold"
+              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+            >
+              {sortDir === 'desc' ? '↓ Desc' : '↑ Asc'}
+            </button>
+          </div>
           <label className="text-xs" style={{ color: 'var(--muted2)' }}>
             Rows
             <select

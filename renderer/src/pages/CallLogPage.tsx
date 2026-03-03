@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { RecordFilters } from '../../../shared/types';
 import { CallLogTable } from '../components/CallLogTable';
 import { useAppStore } from '../state/appStore';
+import { api } from '../lib/api';
 
 interface FilterChip {
   id: string;
@@ -22,8 +23,8 @@ function formatDuration(totalSeconds: number): string {
 function transferFlagLabel(flag: string | undefined): string {
   if (!flag) return '';
   if (flag === 'none') return 'None';
-  if (flag === 'T') return 'T - Transfer';
-  if (flag === 'X') return 'X - Conference';
+  if (flag === 'T') return 'T - Supervised Transfer';
+  if (flag === 'X') return 'X - Unsupervised Transfer';
   if (flag === 'C') return 'C - Conference';
   return flag;
 }
@@ -37,8 +38,13 @@ export function CallLogPage() {
   const refreshRecords = useAppStore((state) => state.refreshRecords);
   const recordsLoading = useAppStore((state) => state.recordsLoading);
   const exportRecords = useAppStore((state) => state.exportRecords);
+  const setToast = useAppStore((state) => state.setToast);
+  const refreshDashboard = useAppStore((state) => state.refreshDashboard);
 
   const [paginationResetToken, setPaginationResetToken] = useState(0);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const totalCalls = callLogSummary.totalCalls;
   const totalTalkTime = formatDuration(callLogSummary.totalDurationSeconds);
@@ -99,7 +105,8 @@ export function CallLogPage() {
     filters.extension,
     filters.hour,
     filters.networkOLI,
-    filters.transferFlag
+    filters.transferFlag,
+    filters.longCallIndicator
   ]);
 
   const triggerRefresh = () => {
@@ -120,6 +127,7 @@ export function CallLogPage() {
       callIdentifier: undefined,
       associatedCallIdentifier: undefined,
       networkOLI: undefined,
+      longCallIndicator: undefined,
       offset: 0
     });
     setPaginationResetToken((value) => value + 1);
@@ -159,6 +167,36 @@ export function CallLogPage() {
       offset: pageIndex * pageSize
     });
     triggerRefresh();
+  };
+
+  const handleImportFile = async () => {
+    if (!importFile || importing) return;
+
+    setImporting(true);
+    setToast({ type: 'loading', title: 'Importing SMDR file', sub: importFile.name });
+
+    try {
+      const content = await importFile.text();
+      const result = await api.importSmdrText({ fileName: importFile.name, content });
+      await refreshRecords();
+      await refreshDashboard(undefined);
+
+      setToast({
+        type: 'success',
+        title: 'SMDR import completed',
+        sub: `Inserted ${result.insertedRecords}/${result.logicalRecords} (${result.duplicateRecords} duplicates, ${result.parseErrors} parse errors)`
+      });
+
+      setImportFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'SMDR import failed';
+      setToast({ type: 'error', title: 'Import failed', sub: message });
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -232,10 +270,10 @@ export function CallLogPage() {
               <option value="E">Error (E)</option>
               <option value="T">Toll Denied (T)</option>
               <option value="I">Internal (I)</option>
-              <option value="O">Outbound (O)</option>
-              <option value="D">No Answer (D)</option>
-              <option value="S">Surfaced (S)</option>
-              <option value="U">Unknown (U)</option>
+              <option value="O">Occupied/Busy (O)</option>
+              <option value="D">Do Not Disturb (D)</option>
+              <option value="S">Out of Service (S)</option>
+              <option value="U">Attendant Unavailable (U)</option>
             </select>
           </div>
           <div className="md:col-span-1 flex items-end">
@@ -279,8 +317,8 @@ export function CallLogPage() {
             >
               <option value="">Any</option>
               <option value="none">None</option>
-              <option value="T">T - Transfer</option>
-              <option value="X">X - Conference</option>
+              <option value="T">T - Supervised Transfer</option>
+              <option value="X">X - Unsupervised Transfer</option>
               <option value="C">C - Conference</option>
             </select>
           </div>
@@ -408,10 +446,10 @@ export function CallLogPage() {
         <div className="card p-3 flex flex-col justify-between" style={{ minHeight: '170px' }}>
           <div>
             <span className="text-xs font-semibold uppercase tracking-wide mb-3 block" style={{ color: 'var(--muted)' }}>
-              Export Data
+              Export / Import
             </span>
             <p className="text-xs mb-4" style={{ color: 'var(--muted2)' }}>
-              Export filtered call logs to CSV or PDF format
+              Export filtered logs or upload an SMDR `.txt` file for parser testing/fallback ingestion.
             </p>
           </div>
           <div className="flex gap-2">
@@ -432,9 +470,30 @@ export function CallLogPage() {
               <span>PDF</span>
             </button>
           </div>
-          <p className="mt-3 text-xs text-center" style={{ color: 'var(--muted2)' }}>
-            Includes timestamp in filename
-          </p>
+          <div className="mt-3 flex flex-col gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,text/plain"
+              className="rounded-xl border px-2 py-1.5 text-xs"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                setImportFile(file);
+              }}
+            />
+            <button
+              onClick={handleImportFile}
+              disabled={!importFile || importing}
+              className="rounded-2xl border px-3 py-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+            >
+              {importing ? 'Importing...' : 'Import SMDR TXT'}
+            </button>
+            <p className="text-[11px] text-center truncate" style={{ color: 'var(--muted2)' }}>
+              {importFile ? `Selected: ${importFile.name}` : 'Includes timestamp in export filename'}
+            </p>
+          </div>
         </div>
       </div>
 

@@ -9,8 +9,12 @@ import {
   CallCategory,
   RateConfig,
   DEFAULT_BILLING_CONFIG,
+  BulkRuleAction,
+  BulkOperationResult,
+  PrefixRule,
 } from '../../shared/types';
 import { isWeekend } from '../../shared/utils/time.js';
+import { BillingAuditService } from './BillingAuditService.js';
 
 export interface BillingOptions {
   callDate?: string;
@@ -19,13 +23,28 @@ export interface BillingOptions {
 
 export class BillingEngine {
   private config: BillingConfig;
+  private auditService: BillingAuditService | null = null;
 
   constructor(config?: BillingConfig) {
     this.config = config ?? { ...DEFAULT_BILLING_CONFIG, updatedAt: new Date().toISOString() };
   }
 
-  updateConfig(config: BillingConfig): void {
+  setAuditService(auditService: BillingAuditService): void {
+    this.auditService = auditService;
+  }
+
+  updateConfig(config: BillingConfig, user?: string): void {
+    const oldConfig = this.config;
     this.config = { ...config, updatedAt: new Date().toISOString() };
+    
+    if (this.auditService) {
+      this.auditService.logChange({
+        changeType: 'config-saved',
+        previousValue: `enabled: ${oldConfig.enabled}, currency: ${oldConfig.currency}`,
+        newValue: `enabled: ${config.enabled}, currency: ${config.currency}`,
+        user: user || 'system'
+      });
+    }
   }
 
   getConfig(): BillingConfig {
@@ -56,6 +75,96 @@ export class BillingEngine {
     }
 
     return { category: 'unclassified', matchedPrefix: null };
+  }
+
+  // ── Bulk Operations ─────────────────────────────────────────────────────────
+
+  bulkRuleAction(action: BulkRuleAction, user?: string): BulkOperationResult {
+    const errors: string[] = [];
+    let affectedCount = 0;
+
+    try {
+      const rulesToUpdate = this.config.prefixRules.filter(r => action.ruleIds.includes(r.id));
+      
+      if (rulesToUpdate.length === 0) {
+        return { success: false, affectedCount: 0, errors: ['No matching rules found'] };
+      }
+
+      const oldRules = [...rulesToUpdate];
+
+      switch (action.action) {
+        case 'enable':
+          this.config.prefixRules = this.config.prefixRules.map(r =>
+            action.ruleIds.includes(r.id) ? { ...r, enabled: true } : r
+          );
+          affectedCount = rulesToUpdate.filter(r => !r.enabled).length;
+          break;
+        case 'disable':
+          this.config.prefixRules = this.config.prefixRules.map(r =>
+            action.ruleIds.includes(r.id) ? { ...r, enabled: false } : r
+          );
+          affectedCount = rulesToUpdate.filter(r => r.enabled).length;
+          break;
+        case 'delete':
+          this.config.prefixRules = this.config.prefixRules.filter(r =>
+            !action.ruleIds.includes(r.id)
+          );
+          affectedCount = rulesToUpdate.length;
+          break;
+      }
+
+      if (this.auditService) {
+        this.auditService.logBulkAction(action, oldRules, user);
+      }
+
+      return { success: true, affectedCount };
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : 'Unknown error');
+      return { success: false, affectedCount: 0, errors };
+    }
+  }
+
+  addRule(rule: PrefixRule, user?: string): void {
+    this.config.prefixRules.push(rule);
+    if (this.auditService) {
+      this.auditService.logRuleChange('rule-added', rule, undefined, user);
+    }
+  }
+
+  updateRule(ruleId: string, updates: Partial<PrefixRule>, user?: string): void {
+    const oldRule = this.config.prefixRules.find(r => r.id === ruleId);
+    if (oldRule) {
+      const newRule = { ...oldRule, ...updates };
+      this.config.prefixRules = this.config.prefixRules.map(r =>
+        r.id === ruleId ? newRule : r
+      );
+      if (this.auditService) {
+        this.auditService.logRuleChange('rule-updated', newRule, oldRule, user);
+      }
+    }
+  }
+
+  deleteRule(ruleId: string, user?: string): void {
+    const oldRule = this.config.prefixRules.find(r => r.id === ruleId);
+    if (oldRule) {
+      this.config.prefixRules = this.config.prefixRules.filter(r => r.id !== ruleId);
+      if (this.auditService) {
+        this.auditService.logRuleChange('rule-deleted', oldRule, undefined, user);
+      }
+    }
+  }
+
+  updateRate(category: CallCategory, updates: Partial<RateConfig>, user?: string): void {
+    const oldRate = this.config.rates.find(r => r.category === category);
+    if (oldRate) {
+      const newRate = { ...oldRate, ...updates };
+      this.config.rates = this.config.rates.map(r =>
+        r.category === category ? newRate : r
+      );
+      if (this.auditService && updates.ratePerMinute !== undefined && oldRate.ratePerMinute !== updates.ratePerMinute) {
+        this.auditService.logRateChange(category, oldRate.ratePerMinute, updates.ratePerMinute, user);
+      }
+    }
   }
 
   // ── Rating ──────────────────────────────────────────────────────────────────

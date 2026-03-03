@@ -57,7 +57,7 @@ export class AlertEngine extends EventEmitter {
       events.push(this.build('tag-call', 'Tag call detected', record));
     }
 
-    if (this.rules.detectTollDenied && record.callCompletionStatus === 'D') {
+    if (this.rules.detectTollDenied && ['T', 'D'].includes(record.callCompletionStatus ?? '')) {
       events.push(this.build('toll-denied', 'Toll denied call detected', record));
     }
 

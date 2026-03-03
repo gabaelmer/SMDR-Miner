@@ -30,7 +30,25 @@ const STATUS_STYLE: Record<string, string> = {
   I: 'sb2',
   O: 'sb2',
   S: 'sb2',
-  U: 'sb2'
+  U: 'sb2',
+  C: 'sb2',
+  R: 'sb2'
+};
+
+const LONG_CALL_STYLE: Record<string, string> = {
+  ' ': 'sb2',
+  '-': 'st',
+  '%': 'bi',
+  '+': 'bi'
+};
+
+const PARTY_TYPE_BADGE: Record<string, string> = {
+  station: 'bint',
+  attendant: 'bext',
+  co_trunk: 'bext',
+  non_co_trunk: 'bext',
+  ip_trunk: 'bext',
+  unknown: 'sb2'
 };
 
 const CAT_STYLE: Record<string, string> = {
@@ -40,6 +58,20 @@ const CAT_STYLE: Record<string, string> = {
   international: 'bi',
   unclassified: 'bu'
 };
+
+const COMPLETION_LEGEND: Array<{ code: string; label: string }> = [
+  { code: 'A', label: 'Answered' },
+  { code: 'B', label: 'Busy' },
+  { code: 'E', label: 'Error' },
+  { code: 'T', label: 'Toll Denied / Pickup' },
+  { code: 'I', label: 'Internal' },
+  { code: 'O', label: 'Occupied' },
+  { code: 'D', label: 'Do Not Disturb' },
+  { code: 'S', label: 'Out of Service' },
+  { code: 'U', label: 'Attendant Unavailable' },
+  { code: 'C', label: 'Caller Account Code' },
+  { code: 'R', label: 'Receiver Account Code' }
+];
 
 function durationToSeconds(duration: string | undefined): number {
   if (!duration) return 0;
@@ -92,6 +124,25 @@ export function CallLogTable({
     callIdentifier: false,
     associatedCallIdentifier: false,
     networkOLI: false,
+    // New Mitel spec fields (hidden by default)
+    longCallIndicator: false,
+    attendantFlag: false,
+    timeToAnswer: false,
+    meterPulses: false,
+    speedCallForwardFlag: false,
+    routeOptFlag: false,
+    systemId: false,
+    ani: false,
+    dnis: false,
+    callSequence: false,
+    suiteId: false,
+    twoBChannelTag: false,
+    callingEHDU: false,
+    calledEHDU: false,
+    callingLocation: false,
+    calledLocation: false,
+    recordFormat: false,
+    // Billing columns
     call_category: showBilling,
     call_cost: showBilling
   };
@@ -192,6 +243,116 @@ export function CallLogTable({
           accessorKey: 'networkOLI',
           header: 'OLI',
           cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600, color: '#FFFFFF' }}>{getValue<string>() || '—'}</span>
+        },
+        // === Mitel Spec Extended Fields ===
+        {
+          accessorKey: 'longCallIndicator',
+          header: 'Long',
+          cell: ({ getValue }) => {
+            const indicator = getValue<string>();
+            const labels: Record<string, string> = { ' ': '<5m', '-': '5-9m', '%': '10-29m', '+': '30+m' };
+            return <span className={LONG_CALL_STYLE[indicator] || 'sb2'} style={{ fontSize: '13px', fontWeight: 700, padding: '4px 8px', color: '#FFFFFF' }}>{labels[indicator] || '—'}</span>;
+          }
+        },
+        {
+          accessorKey: 'attendantFlag',
+          header: 'Attd',
+          cell: ({ getValue }) => {
+            const flag = getValue<string>();
+            return flag === '*' ? <span className="st" style={{ fontSize: '13px', fontWeight: 700, padding: '4px 8px', color: '#FFFFFF' }}>✱</span> : <span>—</span>;
+          }
+        },
+        {
+          accessorKey: 'timeToAnswer',
+          header: 'TTA',
+          cell: ({ getValue }) => {
+            const tta = getValue<number | null>();
+            return tta !== null && tta !== undefined ? <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{tta}s</span> : <span>—</span>;
+          }
+        },
+        {
+          accessorKey: 'meterPulses',
+          header: 'Meter',
+          cell: ({ getValue }) => {
+            const pulses = getValue<number | null>();
+            return pulses !== null && pulses !== undefined ? <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{pulses}</span> : <span>—</span>;
+          }
+        },
+        {
+          accessorKey: 'speedCallForwardFlag',
+          header: 'S/F',
+          cell: ({ getValue }) => {
+            const flag = getValue<string>();
+            const labels: Record<string, string> = { S: 'Speed', F: 'Fwd' };
+            return flag ? <span className="badge bext" style={{ fontSize: '13px', fontWeight: 600, padding: '4px 8px' }}>{labels[flag] || flag}</span> : <span>—</span>;
+          }
+        },
+        {
+          accessorKey: 'routeOptFlag',
+          header: 'Route',
+          cell: ({ getValue }) => {
+            const flag = getValue<string>();
+            const labels: Record<string, string> = { r: 'Pre-opt', R: 'Post-opt' };
+            return flag ? <span className="badge bl" style={{ fontSize: '13px', fontWeight: 600, padding: '4px 8px' }}>{labels[flag] || flag}</span> : <span>—</span>;
+          }
+        },
+        {
+          accessorKey: 'systemId',
+          header: 'Sys ID',
+          cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{getValue<string>() || '—'}</span>
+        },
+        {
+          accessorKey: 'ani',
+          header: 'ANI',
+          cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{getValue<string>() || '—'}</span>
+        },
+        {
+          accessorKey: 'dnis',
+          header: 'DNIS',
+          cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{getValue<string>() || '—'}</span>
+        },
+        {
+          accessorKey: 'callSequence',
+          header: 'Seq',
+          cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{getValue<string>() || '—'}</span>
+        },
+        {
+          accessorKey: 'suiteId',
+          header: 'Suite',
+          cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{getValue<string>() || '—'}</span>
+        },
+        {
+          accessorKey: 'twoBChannelTag',
+          header: '2B Tag',
+          cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{getValue<string>() || '—'}</span>
+        },
+        {
+          accessorKey: 'callingEHDU',
+          header: 'EHDU (Call)',
+          cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{getValue<string>() || '—'}</span>
+        },
+        {
+          accessorKey: 'calledEHDU',
+          header: 'EHDU (Recv)',
+          cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{getValue<string>() || '—'}</span>
+        },
+        {
+          accessorKey: 'callingLocation',
+          header: 'Location (Call)',
+          cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{getValue<string>() || '—'}</span>
+        },
+        {
+          accessorKey: 'calledLocation',
+          header: 'Location (Recv)',
+          cell: ({ getValue }) => <span className="mono" style={{ fontSize: '14px', fontWeight: 600 }}>{getValue<string>() || '—'}</span>
+        },
+        {
+          accessorKey: 'recordFormat',
+          header: 'Format',
+          cell: ({ getValue }) => {
+            const format = getValue<string>();
+            return <span className="badge bu" style={{ fontSize: '13px', fontWeight: 600, padding: '4px 8px' }}>{format || '—'}</span>;
+          }
         }
       ];
 
@@ -401,16 +562,53 @@ export function CallLogTable({
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
-        <div style={{ fontSize: '11px', color: 'var(--muted2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
+        <div style={{ fontSize: '11px', color: 'var(--muted2)', whiteSpace: 'nowrap' }}>
           Showing {table.getRowModel().rows.length} of {totalRecords ?? rows.length} records
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div
+          style={{
+            flex: '1 1 420px',
+            minWidth: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            overflowX: 'auto',
+            padding: '0 8px'
+          }}
+        >
+          {COMPLETION_LEGEND.map((entry) => (
+            <span
+              key={entry.code}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '3px 7px',
+                borderRadius: '10px',
+                border: '1px solid var(--border)',
+                background: 'var(--surface-alt)',
+                fontSize: '10px',
+                color: 'var(--muted2)',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
+              }}
+              title={`${entry.code} = ${entry.label}`}
+            >
+              <span className={STATUS_STYLE[entry.code] || 'sb2'} style={{ minWidth: '18px', textAlign: 'center', color: '#FFFFFF' }}>
+                {entry.code}
+              </span>
+              <span>{entry.label}</span>
+            </span>
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button
             onClick={() => table.setPageIndex(0)}
             disabled={!table.getCanPreviousPage()}
             className="btn bg2"
-            style={{ fontSize: '11px', padding: '4px 10px' }}
+            style={{ fontSize: '11px', padding: '4px 10px', minWidth: '52px' }}
           >
             First
           </button>
@@ -418,18 +616,18 @@ export function CallLogTable({
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
             className="btn bg2"
-            style={{ fontSize: '11px', padding: '4px 10px' }}
+            style={{ fontSize: '11px', padding: '4px 10px', minWidth: '52px' }}
           >
             Prev
           </button>
-          <span style={{ fontSize: '11px', color: 'var(--text)' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text)', whiteSpace: 'nowrap', minWidth: '88px', textAlign: 'center' }}>
             Page {table.getState().pagination.pageIndex + 1} of {pageCount}
           </span>
           <button
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
             className="btn bg2"
-            style={{ fontSize: '11px', padding: '4px 10px' }}
+            style={{ fontSize: '11px', padding: '4px 10px', minWidth: '52px' }}
           >
             Next
           </button>
@@ -437,7 +635,7 @@ export function CallLogTable({
             onClick={() => table.setPageIndex(Math.max(table.getPageCount() - 1, 0))}
             disabled={!table.getCanNextPage()}
             className="btn bg2"
-            style={{ fontSize: '11px', padding: '4px 10px' }}
+            style={{ fontSize: '11px', padding: '4px 10px', minWidth: '52px' }}
           >
             Last
           </button>
@@ -460,12 +658,12 @@ export function CallLogTable({
             marginTop: '10px',
             borderColor: 'var(--border)',
             background: 'var(--surface-alt)',
-            maxHeight: '180px',
+            maxHeight: '280px',
             overflowY: 'auto'
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <p style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 700 }}>Record Details</p>
+            <p style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 700 }}>Record Details (Mitel SMDR)</p>
             <button
               className="btn bg2"
               style={{ fontSize: '11px', padding: '4px 10px' }}
@@ -474,16 +672,63 @@ export function CallLogTable({
               Close
             </button>
           </div>
-          <div className="grid gap-2 md:grid-cols-2" style={{ fontSize: '11px', color: 'var(--muted)' }}>
+          
+          {/* Core Fields */}
+          <div className="grid gap-2 md:grid-cols-3" style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '12px' }}>
             <p><strong style={{ color: 'var(--text)' }}>Date/Time:</strong> {selectedRecord.date} {selectedRecord.startTime}</p>
             <p><strong style={{ color: 'var(--text)' }}>Duration:</strong> {selectedRecord.duration}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Long Call:</strong> {selectedRecord.longCallIndicator === '+' ? '30+ min' : selectedRecord.longCallIndicator === '%' ? '10-29 min' : selectedRecord.longCallIndicator === '-' ? '5-9 min' : '<5 min'}</p>
             <p><strong style={{ color: 'var(--text)' }}>Calling:</strong> {selectedRecord.callingParty || '—'}</p>
             <p><strong style={{ color: 'var(--text)' }}>Called:</strong> {selectedRecord.calledParty || '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Third Party:</strong> {selectedRecord.thirdParty || '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Trunk:</strong> {selectedRecord.trunkNumber || '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Digits Dialed:</strong> {selectedRecord.digitsDialed || '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Account Code:</strong> {selectedRecord.accountCode || '—'}</p>
+          </div>
+          
+          {/* Call Status & Flags */}
+          <div className="grid gap-2 md:grid-cols-3" style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '12px' }}>
+            <p><strong style={{ color: 'var(--text)' }}>Completion:</strong> <span className={STATUS_STYLE[selectedRecord.callCompletionStatus || ''] || 'sb2'} style={{ padding: '2px 6px', borderRadius: '4px' }}>{selectedRecord.callCompletionStatus || '—'}</span></p>
+            <p><strong style={{ color: 'var(--text)' }}>Transfer:</strong> {selectedRecord.transferConference || '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Speed/Fwd:</strong> {selectedRecord.speedCallForwardFlag === 'S' ? 'Speed Call' : selectedRecord.speedCallForwardFlag === 'F' ? 'Forwarded' : '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Attendant:</strong> {selectedRecord.attendantFlag === '*' ? '✱ Assisted' : '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Time to Answer:</strong> {selectedRecord.timeToAnswer !== null && selectedRecord.timeToAnswer !== undefined ? `${selectedRecord.timeToAnswer}s` : '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Meter Pulses:</strong> {selectedRecord.meterPulses ?? '—'}</p>
+          </div>
+          
+          {/* Network & Extended Fields */}
+          <div className="grid gap-2 md:grid-cols-3" style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '12px' }}>
             <p><strong style={{ color: 'var(--text)' }}>Call ID:</strong> {selectedRecord.callIdentifier || '—'}</p>
             <p><strong style={{ color: 'var(--text)' }}>Assoc ID:</strong> {selectedRecord.associatedCallIdentifier || '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Sequence:</strong> {selectedRecord.callSequence || '—'}</p>
             <p><strong style={{ color: 'var(--text)' }}>Network OLI:</strong> {selectedRecord.networkOLI || '—'}</p>
-            <p><strong style={{ color: 'var(--text)' }}>Transfer Flag:</strong> {selectedRecord.transferFlag || '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>ANI:</strong> {selectedRecord.ani || '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>DNIS:</strong> {selectedRecord.dnis || '—'}</p>
           </div>
+          
+          {/* Extended Reporting Fields */}
+          {(selectedRecord.suiteId || selectedRecord.twoBChannelTag || selectedRecord.callingEHDU || selectedRecord.calledEHDU || selectedRecord.callingLocation || selectedRecord.calledLocation) && (
+            <div className="grid gap-2 md:grid-cols-3" style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '12px' }}>
+              <p><strong style={{ color: 'var(--text)' }}>Suite ID:</strong> {selectedRecord.suiteId || '—'}</p>
+              <p><strong style={{ color: 'var(--text)' }}>2B Channel Tag:</strong> {selectedRecord.twoBChannelTag || '—'}</p>
+              <p><strong style={{ color: 'var(--text)' }}>EHDU (Calling):</strong> {selectedRecord.callingEHDU || '—'}</p>
+              <p><strong style={{ color: 'var(--text)' }}>EHDU (Called):</strong> {selectedRecord.calledEHDU || '—'}</p>
+              <p><strong style={{ color: 'var(--text)' }}>Location (Calling):</strong> {selectedRecord.callingLocation || '—'}</p>
+              <p><strong style={{ color: 'var(--text)' }}>Location (Called):</strong> {selectedRecord.calledLocation || '—'}</p>
+            </div>
+          )}
+          
+          {/* System & Format Info */}
+          <div className="grid gap-2 md:grid-cols-3" style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '12px' }}>
+            <p><strong style={{ color: 'var(--text)' }}>System ID:</strong> {selectedRecord.systemId || '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Route Opt:</strong> {selectedRecord.routeOptFlag === 'r' ? 'Pre-opt' : selectedRecord.routeOptFlag === 'R' ? 'Post-opt' : '—'}</p>
+            <p><strong style={{ color: 'var(--text)' }}>Record Format:</strong> {selectedRecord.recordFormat || '—'}</p>
+            {selectedRecord.call_cost !== undefined && (
+              <p><strong style={{ color: 'var(--text)' }}>Cost:</strong> <span style={{ color: 'var(--brand)', fontWeight: 700 }}>{formatCurrency(selectedRecord.call_cost, selectedRecord.bill_currency || 'PHP')}</span></p>
+            )}
+          </div>
+          
+          {/* Action Buttons */}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
             <button className="btn bg2" style={{ fontSize: '11px', padding: '5px 10px' }} onClick={() => void copyToClipboard('Call ID', selectedRecord.callIdentifier)}>
               Copy Call ID

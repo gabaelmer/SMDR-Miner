@@ -81,7 +81,7 @@ describe('UserManagementPage', () => {
     render(<UserManagementPage />);
 
     await waitFor(() => expect(screen.getByText('delete_me')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: /Delete user delete_me/i }));
 
     expect(screen.getByRole('heading', { name: 'Delete User' })).toBeTruthy();
     expect(screen.getByText(/cannot be undone/i)).toBeTruthy();

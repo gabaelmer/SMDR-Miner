@@ -1,18 +1,26 @@
 import Database from 'better-sqlite3';
 
-export type AuditAction = 
+export type AuditAction =
   | 'login'
   | 'logout'
   | 'config-change'
   | 'alert-rule-change'
   | 'billing-config-change'
   | 'export'
+  | 'import'
   | 'purge'
   | 'user-create'
   | 'user-delete'
+  | 'user-bulk-delete'
+  | 'user-role-change'
+  | 'user-bulk-role-change'
   | 'password-change'
+  | 'password-reset'
   | 'stream-start'
-  | 'stream-stop';
+  | 'stream-stop'
+  | 'account-unlocked'
+  | 'account-lock'
+  | 'account-status-change';
 
 export interface AuditEntry {
   id?: number;
@@ -55,13 +63,15 @@ export class AuditLogger {
     );
   }
 
-  getLogs(options?: { 
-    action?: AuditAction; 
-    user?: string; 
-    startDate?: string; 
+  getLogs(options?: {
+    action?: AuditAction;
+    user?: string;
+    startDate?: string;
     endDate?: string;
-    limit?: number 
-  }): AuditEntry[] {
+    ipAddress?: string;
+    limit?: number;
+    offset?: number;
+  }): { data: AuditEntry[]; total: number } {
     const where: string[] = [];
     const params: (string | number)[] = [];
 
@@ -85,16 +95,30 @@ export class AuditLogger {
       params.push(options.endDate);
     }
 
+    if (options?.ipAddress) {
+      where.push('ip_address LIKE ?');
+      params.push(`%${options.ipAddress}%`);
+    }
+
     const clause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+    
+    // Get total count
+    const totalResult = this.db.prepare(`
+      SELECT COUNT(*) as count
+      FROM audit_log
+      ${clause}
+    `).get(...params) as { count: number };
+    
     const limit = options?.limit ?? 1000;
+    const offset = options?.offset ?? 0;
 
     const rows = this.db.prepare(`
       SELECT id, action, user, details, ip_address, created_at
       FROM audit_log
       ${clause}
       ORDER BY id DESC
-      LIMIT ?
-    `).all(...params, limit) as Array<{
+      LIMIT ? OFFSET ?
+    `).all(...params, limit, offset) as Array<{
       id: number;
       action: string;
       user: string;
@@ -103,14 +127,17 @@ export class AuditLogger {
       created_at: string;
     }>;
 
-    return rows.map((row) => ({
-      id: row.id,
-      action: row.action as AuditAction,
-      user: row.user,
-      details: row.details ? JSON.parse(row.details) : undefined,
-      ipAddress: row.ip_address ?? undefined,
-      createdAt: row.created_at
-    }));
+    return {
+      total: totalResult.count,
+      data: rows.map((row) => ({
+        id: row.id,
+        action: row.action as AuditAction,
+        user: row.user,
+        details: row.details ? JSON.parse(row.details) : undefined,
+        ipAddress: row.ip_address ?? undefined,
+        createdAt: row.created_at
+      }))
+    };
   }
 
   purgeOlderThan(days: number): number {
@@ -160,6 +187,15 @@ export class AuditLogger {
       action: 'export',
       user,
       details: { format, recordCount },
+      ipAddress
+    });
+  }
+
+  logImport(user: string, source: string, stats: Record<string, unknown>, ipAddress?: string): void {
+    this.log({
+      action: 'import',
+      user,
+      details: { source, ...stats },
       ipAddress
     });
   }

@@ -45,12 +45,31 @@ export const alertRuleSetSchema = z.object({
   detectTollDenied: z.boolean()
 });
 
+// ─── SMDR Parser Config ──────────────────────────────────────────────────────
+
+export const smdrParserConfigSchema = z.object({
+  extendedDigitLength: z.boolean().default(false),
+  aniDnisReporting: z.boolean().default(false),
+  networkOLI: z.boolean().default(false),
+  extendedReportingL1: z.boolean().default(false),
+  extendedReportingL2: z.boolean().default(false),
+  extendedTimeToAnswer: z.boolean().default(false),
+  networkFormat: z.boolean().default(false),
+  reportMeterPulses: z.boolean().default(false),
+  suiteServices: z.boolean().default(false),
+  twoBChannelTransfer: z.boolean().default(false),
+  externalHotDesk: z.boolean().default(false),
+  locationReporting: z.boolean().default(false),
+  twentyFourHourTime: z.boolean().default(true)
+});
+
 // ─── App Config ──────────────────────────────────────────────────────────────
 
 export const appConfigSchema = z.object({
   connection: connectionConfigSchema,
   storage: storageConfigSchema,
   alerts: alertRuleSetSchema,
+  smdrParser: smdrParserConfigSchema,
   maxInMemoryRecords: z.number().int().min(50).max(50000)
 });
 
@@ -69,8 +88,17 @@ export const recordFiltersSchema = z.object({
   callIdentifier: z.string().optional().or(z.literal('')).transform(d => d || undefined),
   associatedCallIdentifier: z.string().optional().or(z.literal('')).transform(d => d || undefined),
   networkOLI: z.string().optional().or(z.literal('')).transform(d => d || undefined),
+  // Mitel spec filters
+  longCallIndicator: z.string().optional().or(z.literal('')).transform(d => d || undefined),
+  ani: z.string().optional().or(z.literal('')).transform(d => d || undefined),
+  dnis: z.string().optional().or(z.literal('')).transform(d => d || undefined),
   limit: z.coerce.number().int().min(1).max(50000).optional().default(500),
   offset: z.coerce.number().int().min(0).optional().default(0)
+});
+
+export const smdrTextImportSchema = z.object({
+  fileName: z.string().trim().min(1).max(255).optional(),
+  content: z.string().min(1).max(30_000_000)
 });
 
 // ─── Export Options ──────────────────────────────────────────────────────────
@@ -209,6 +237,7 @@ export type StorageConfig = z.infer<typeof storageConfigSchema>;
 export type AlertRuleSet = z.infer<typeof alertRuleSetSchema>;
 export type AppConfig = z.infer<typeof appConfigSchema>;
 export type RecordFilters = z.infer<typeof recordFiltersSchema>;
+export type SMDRTextImportPayload = z.infer<typeof smdrTextImportSchema>;
 export type ExportOptions = z.infer<typeof exportOptionsSchema>;
 export type CallCategory = z.infer<typeof callCategorySchema>;
 export type PrefixRule = z.infer<typeof prefixRuleSchema>;
@@ -221,3 +250,4 @@ export type BillingPrefixRuleUpdate = z.infer<typeof billingPrefixRuleUpdateSche
 export type BillingRatesUpdate = z.infer<typeof billingRatesUpdateSchema>;
 export type BillingReportRequest = z.infer<typeof billingReportRequestSchema>;
 export type AuditLogEntry = z.infer<typeof auditLogEntrySchema>;
+export type SMDRParserConfig = z.infer<typeof smdrParserConfigSchema>;

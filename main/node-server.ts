@@ -1,5 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { SMDRService } from '../backend/SMDRService';
 import { AppConfig } from '../shared/types';
 import { buildDefaultConfig } from './defaultConfig';
@@ -14,13 +15,82 @@ const configDir = process.env.SMDR_CONFIG_DIR || path.join(process.cwd(), 'confi
 const configPath = path.join(configDir, 'settings.json');
 const configBackupPath = path.join(configDir, 'settings.backup.json');
 const configHistoryDir = path.join(configDir, 'config-history');
+const defaultLockDir = path.join(os.homedir(), '.smdr-insight');
+const processLockPath = process.env.SMDR_PROCESS_LOCK_PATH || path.join(defaultLockDir, 'node-server.lock');
 const maxConfigHistoryFiles = 15;
 
 console.log('[NodeServer] Config directory:', configDir);
 console.log('[NodeServer] Config file:', configPath);
+console.log('[NodeServer] Process lock file:', processLockPath);
 
 if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true });
+}
+fs.mkdirSync(path.dirname(processLockPath), { recursive: true });
+
+let lockAcquired = false;
+
+function readExistingLockPid(): number | undefined {
+    try {
+        const raw = fs.readFileSync(processLockPath, 'utf8').trim();
+        if (!raw) return undefined;
+        const parsed = Number.parseInt(raw, 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function isPidActive(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function acquireProcessLock(): void {
+    try {
+        fs.writeFileSync(processLockPath, `${process.pid}\n`, { flag: 'wx' });
+        lockAcquired = true;
+        return;
+    } catch (err: any) {
+        if (err?.code !== 'EEXIST') {
+            throw err;
+        }
+    }
+
+    const existingPid = readExistingLockPid();
+    if (existingPid && existingPid !== process.pid && isPidActive(existingPid)) {
+        console.error(`[NodeServer] Another instance is already running (PID: ${existingPid}). Exiting.`);
+        process.exit(1);
+    }
+
+    // Stale lock file; replace it.
+    try {
+        fs.rmSync(processLockPath, { force: true });
+        fs.writeFileSync(processLockPath, `${process.pid}\n`, { flag: 'wx' });
+        lockAcquired = true;
+        console.log('[NodeServer] Replaced stale process lock file');
+    } catch (err) {
+        console.error('[NodeServer] Failed to acquire process lock:', err);
+        process.exit(1);
+    }
+}
+
+function releaseProcessLock(): void {
+    if (!lockAcquired) return;
+    try {
+        const current = readExistingLockPid();
+        if (current === process.pid) {
+            fs.rmSync(processLockPath, { force: true });
+        }
+    } catch {
+        // Best effort cleanup
+    } finally {
+        lockAcquired = false;
+    }
 }
 
 function readJsonObject(filePath: string): Record<string, unknown> | undefined {
@@ -133,6 +203,7 @@ function loadConfig(): AppConfig {
 }
 
 const config = loadConfig();
+acquireProcessLock();
 
 // Ensure DB directory exists
 const dbDir = path.dirname(config.storage.dbPath);
@@ -173,13 +244,19 @@ console.log('[NodeServer] Waiting for MiVB connection...');
 process.on('SIGTERM', () => {
     console.log('[NodeServer] SIGTERM received, shutting down...');
     service.close();
+    releaseProcessLock();
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
     console.log('[NodeServer] SIGINT received, shutting down...');
     service.close();
+    releaseProcessLock();
     process.exit(0);
+});
+
+process.on('exit', () => {
+    releaseProcessLock();
 });
 
 // Unhandled errors

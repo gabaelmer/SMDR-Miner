@@ -15,6 +15,7 @@ import { SMDRService } from '../SMDRService';
 import { SMDRRecord, AppConfig, BillingConfig, BillingReportData, CallCategory, PrefixRule } from '../../shared/types';
 import { BillingConfigManager } from '../billing/BillingConfigManager';
 import { billingEngine } from '../billing/BillingEngine';
+import { BillingAuditService } from '../billing/BillingAuditService';
 import { AuthService, createAuthMiddleware } from '../security/AuthService';
 import { AuditAction, AuditLogger } from '../security/AuditLogger';
 import {
@@ -27,7 +28,8 @@ import {
     billingReportRequestSchema,
     billingRatesUpdateSchema,
     billingTestRequestSchema,
-    recordFiltersSchema
+    recordFiltersSchema,
+    smdrTextImportSchema
 } from '../../shared/validators';
 
 export class WebServer {
@@ -46,15 +48,20 @@ export class WebServer {
 
     constructor(private readonly service: SMDRService, private readonly configDir: string) {
         this.billingConfig = new BillingConfigManager(configDir);
-        
+
         // Initialize auth and audit with raw DB
         const db = service.getRawDb();
         this.authService = new AuthService(db);
         this.authService.init();
-        
+
         this.auditLogger = new AuditLogger(db);
         this.auditLogger.init();
-        
+
+        // Initialize billing audit service
+        const billingAuditService = new BillingAuditService();
+        billingAuditService.setDatabase(db);
+        billingEngine.setAuditService(billingAuditService);
+
         this.authMiddleware = createAuthMiddleware(this.authService);
 
         // Middleware
@@ -73,7 +80,7 @@ export class WebServer {
             credentials: true,
             exposedHeaders: ['Content-Length', 'Content-Disposition', 'X-Billing-Top-Calls-Truncated', 'X-Billing-Top-Calls-Count']
         }));
-        this.app.use(express.json({ limit: '10mb' }));
+        this.app.use(express.json({ limit: '35mb' }));
         this.app.use((_req, res, next) => {
             res.setHeader('X-Content-Type-Options', 'nosniff');
             res.setHeader('X-Frame-Options', 'DENY');
@@ -312,29 +319,40 @@ export class WebServer {
 
         // ─── Authentication ────────────────────────────────────────────────────
         this.app.post('/api/auth/login', (req, res) => {
+            console.log('[WebServer] Login request received');
+            
             const result = authCredentialsSchema.safeParse(req.body);
             if (!result.success) {
+                console.log('[WebServer] Invalid credentials format');
                 return res.status(400).json({ success: false, error: 'Invalid credentials format' });
             }
 
             const { username, password } = result.data;
-            const authResult = this.authService.authenticate({ username, password });
+            console.log(`[WebServer] Login attempt for user: ${username}`);
             
             const ipAddress = req.ip || req.socket.remoteAddress;
+            const userAgent = req.get('user-agent');
+            const authResult = this.authService.authenticate({ username, password }, ipAddress || undefined, userAgent);
+
+            console.log(`[WebServer] Auth result: success=${authResult.success}, error=${authResult.error}`);
+            
             this.auditLogger.logLogin(username, authResult.success, ipAddress || undefined);
 
             if (authResult.success) {
                 if (!authResult.token) {
+                    console.log('[WebServer] Token generation failed');
                     return res.status(500).json({ success: false, error: 'Authentication token generation failed' });
                 }
+                console.log(`[WebServer] Login successful for ${username}`);
                 this.setAuthCookie(res, authResult.token);
-                res.json({ 
-                    success: true, 
+                res.json({
+                    success: true,
                     token: authResult.token,
                     username: authResult.username,
                     role: authResult.role
                 });
             } else {
+                console.log(`[WebServer] Login failed: ${authResult.error}`);
                 res.status(401).json({ success: false, error: authResult.error });
             }
         });
@@ -353,7 +371,33 @@ export class WebServer {
             res.json({ success: true, user: req.user });
         });
 
-        // User Management (Admin only)
+        // Unlock locked account (Admin only)
+        this.app.post('/api/auth/unlock-account', this.authMiddleware, (req, res) => {
+            try {
+                if (!this.requireAdmin(req, res)) return;
+                
+                const result = authCredentialsSchema.safeParse(req.body);
+                if (!result.success) {
+                    return res.status(400).json({ success: false, error: 'Invalid request' });
+                }
+                
+                const unlockResult = this.authService.unlockAccount(req.user!.username, result.data.username);
+                if (unlockResult.success) {
+                    this.auditLogger.log({
+                        action: 'account-unlocked',
+                        user: req.user!.username,
+                        details: { targetUser: result.data.username },
+                        ipAddress: req.ip || undefined
+                    });
+                    res.json({ success: true });
+                } else {
+                    res.status(400).json({ success: false, error: unlockResult.error });
+                }
+            } catch (error) {
+                res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Failed to unlock account' });
+            }
+        });
+
         this.app.get('/api/users', this.authMiddleware, (req, res) => {
             try {
                 if (!this.requireAdmin(req, res)) return;
@@ -362,8 +406,20 @@ export class WebServer {
                 const pageSizeRaw = Number.parseInt(String(req.query.pageSize ?? '20'), 10);
                 const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
                 const pageSize = Number.isFinite(pageSizeRaw) ? Math.min(Math.max(pageSizeRaw, 5), 100) : 20;
+                
+                // Basic filters
                 const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
                 const role = typeof req.query.role === 'string' ? req.query.role.trim().toLowerCase() : '';
+                
+                // Advanced filters
+                const status = typeof req.query.status === 'string' ? req.query.status : '';
+                const createdAfter = typeof req.query.createdAfter === 'string' ? req.query.createdAfter : '';
+                const createdBefore = typeof req.query.createdBefore === 'string' ? req.query.createdBefore : '';
+                const lastLoginAfter = typeof req.query.lastLoginAfter === 'string' ? req.query.lastLoginAfter : '';
+                const lastLoginBefore = typeof req.query.lastLoginBefore === 'string' ? req.query.lastLoginBefore : '';
+                const neverLoggedIn = req.query.neverLoggedIn === 'true';
+                const inactiveDays = typeof req.query.inactiveDays === 'string' ? Number.parseInt(req.query.inactiveDays, 10) : undefined;
+                
                 const sortByRaw = typeof req.query.sortBy === 'string' ? req.query.sortBy : 'created_at';
                 const sortDirRaw = typeof req.query.sortDir === 'string' ? req.query.sortDir : 'desc';
 
@@ -380,34 +436,42 @@ export class WebServer {
                 const sortColumn = sortColumnMap[sortByRaw] || 'created_at';
                 const sortDir = sortDirRaw.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-                const whereClauses: string[] = [];
-                const whereParams: unknown[] = [];
-                if (search) {
-                    whereClauses.push('username LIKE ?');
-                    whereParams.push(`%${search}%`);
-                }
-                if (role) {
-                    whereClauses.push('role = ?');
-                    whereParams.push(role);
-                }
-                const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+                // Use AuthService for filtering with advanced options
+                const users = this.authService.listUsers({
+                    search: search || undefined,
+                    role: role || undefined,
+                    status: status || undefined,
+                    createdAfter: createdAfter || undefined,
+                    createdBefore: createdBefore || undefined,
+                    lastLoginAfter: lastLoginAfter || undefined,
+                    lastLoginBefore: lastLoginBefore || undefined,
+                    neverLoggedIn: neverLoggedIn || undefined,
+                    inactiveDays: inactiveDays
+                });
 
-                const db = this.service.getRawDb();
-                const totalRow = db.prepare(`SELECT COUNT(1) as total FROM users ${whereSql}`).get(...whereParams) as { total: number };
+                // Apply sorting in memory
+                const sortKey = sortByRaw as keyof typeof users[0];
+                const sortedUsers = [...users].sort((a, b) => {
+                    const aVal = a[sortKey] || '';
+                    const bVal = b[sortKey] || '';
+                    const cmp = String(aVal).localeCompare(String(bVal));
+                    return sortDir === 'ASC' ? cmp : -cmp;
+                });
+
+                // Apply pagination
+                const total = sortedUsers.length;
                 const offset = (page - 1) * pageSize;
-                const users = db.prepare(`
-                    SELECT id, username, role, created_at, last_login
-                    FROM users
-                    ${whereSql}
-                    ORDER BY ${sortColumn} ${sortDir}, id DESC
-                    LIMIT ? OFFSET ?
-                `).all(...whereParams, pageSize, offset) as Array<{ id: number; username: string; role: string; created_at: string; last_login: string | null }>;
+                const paginatedUsers = sortedUsers.slice(offset, offset + pageSize);
 
                 res.json({
                     success: true,
                     data: {
-                        items: users.map((user) => ({ ...user, last_login: user.last_login || undefined })),
-                        total: totalRow.total,
+                        items: paginatedUsers.map((user) => ({ 
+                            ...user, 
+                            last_login: user.last_login || undefined,
+                            locked_until: user.locked_until || undefined
+                        })),
+                        total,
                         page,
                         pageSize
                     }
@@ -516,6 +580,84 @@ export class WebServer {
                 res.json({ success: true, message: 'User deleted successfully' });
             } catch (err: any) {
                 res.status(500).json({ success: false, error: err.message });
+            }
+        });
+
+        // User Details
+        this.app.get('/api/users/:username/details', this.authMiddleware, (req, res) => {
+            console.log('[UserDetails] Request for username:', req.params.username);
+            console.log('[UserDetails] User:', req.user?.username);
+            
+            try {
+                if (!this.requireAdmin(req, res)) return;
+                const { username } = req.params;
+                const result = this.authService.getUserDetails(username);
+                console.log('[UserDetails] Result:', result);
+                
+                if (!result.success) {
+                    return res.status(404).json({ success: false, error: result.error });
+                }
+                res.json({ success: true, data: result.user });
+            } catch (err: any) {
+                console.error('[UserDetails] Error:', err.message);
+                res.status(500).json({ success: false, error: err.message });
+            }
+        });
+
+        this.app.get('/api/users/:username/audit', this.authMiddleware, (req, res) => {
+            try {
+                if (!this.requireAdmin(req, res)) return;
+                const { username } = req.params;
+                const limit = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : 20;
+                const entries = this.authService.getUserAuditHistory(username, limit);
+                res.json({ success: true, data: entries });
+            } catch (err: any) {
+                res.status(500).json({ success: false, error: err.message });
+            }
+        });
+
+        // Bulk Operations
+        this.app.post('/api/users/bulk-delete', this.authMiddleware, (req, res) => {
+            console.log('[BulkDelete] Request received:', req.body);
+            console.log('[BulkDelete] User:', req.user?.username);
+            
+            try {
+                if (!this.requireAdmin(req, res)) return;
+                const { usernames } = req.body as { usernames: string[] };
+                console.log('[BulkDelete] Usernames to delete:', usernames);
+                
+                if (!Array.isArray(usernames) || usernames.length === 0) {
+                    console.log('[BulkDelete] Invalid usernames array');
+                    return res.status(400).json({ success: false, error: 'Usernames array required' });
+                }
+                const result = this.authService.bulkDeleteUsers(req.user?.username || '', usernames);
+                console.log('[BulkDelete] Result:', result);
+                
+                this.auditLogger.log({ action: 'user-bulk-delete', user: req.user?.username, details: { deletedCount: result.deleted } });
+                // Always return 200 OK, let frontend handle partial failures
+                res.json({ success: result.errors.length === 0, deleted: result.deleted, errors: result.errors });
+            } catch (err: any) {
+                console.error('[BulkDelete] Error:', err.message);
+                res.status(500).json({ success: false, deleted: 0, errors: [err.message] });
+            }
+        });
+
+        this.app.post('/api/users/bulk-update-role', this.authMiddleware, (req, res) => {
+            try {
+                if (!this.requireAdmin(req, res)) return;
+                const { usernames, role } = req.body as { usernames: string[]; role: 'admin' | 'user' };
+                if (!Array.isArray(usernames) || usernames.length === 0) {
+                    return res.status(400).json({ success: false, error: 'Usernames array required' });
+                }
+                if (role !== 'admin' && role !== 'user') {
+                    return res.status(400).json({ success: false, error: 'Invalid role' });
+                }
+                const result = this.authService.bulkUpdateRole(req.user?.username || '', usernames, role);
+                this.auditLogger.log({ action: 'user-bulk-role-change', user: req.user?.username, details: { updatedCount: result.updated, newRole: role } });
+                // Always return 200 OK, let frontend handle partial failures
+                res.json({ success: result.errors.length === 0, updated: result.updated, errors: result.errors });
+            } catch (err: any) {
+                res.status(500).json({ success: false, updated: 0, errors: [err.message] });
             }
         });
 
@@ -647,6 +789,37 @@ export class WebServer {
             res.json(this.service.getCallLogSummary(result.data));
         });
 
+        this.app.post('/api/records/import-text', (req, res) => {
+            try {
+                if (!this.requireAdmin(req, res)) return;
+
+                const parsed = smdrTextImportSchema.safeParse(req.body);
+                if (!parsed.success) {
+                    return res.status(400).json({ success: false, error: 'Invalid import payload', details: parsed.error.errors });
+                }
+
+                const result = this.service.importSmdrText(parsed.data.content, parsed.data.fileName);
+                this.auditLogger.logImport(
+                    req.user?.username || 'unknown',
+                    parsed.data.fileName || 'manual upload',
+                    {
+                        totalLines: result.totalLines,
+                        logicalRecords: result.logicalRecords,
+                        parsedRecords: result.parsedRecords,
+                        insertedRecords: result.insertedRecords,
+                        duplicateRecords: result.duplicateRecords,
+                        parseErrors: result.parseErrors,
+                        skippedLines: result.skippedLines
+                    },
+                    req.ip || undefined
+                );
+
+                res.json({ success: true, data: result });
+            } catch (err: any) {
+                res.status(500).json({ success: false, error: err.message });
+            }
+        });
+
         this.app.get('/api/analytics', (req, res) => {
             const { startDate, endDate } = req.query;
             res.json(this.service.getAnalytics(startDate as string, endDate as string));
@@ -695,7 +868,7 @@ export class WebServer {
 
         this.app.get('/api/audit-logs', (req, res) => {
             if (!this.requireAdmin(req, res)) return;
-            const { action, user, startDate, endDate, limit } = req.query as Record<string, string>;
+            const { action, user, startDate, endDate, limit, offset, ipAddress } = req.query as Record<string, string>;
             const allowedActions: AuditAction[] = [
                 'login',
                 'logout',
@@ -703,26 +876,38 @@ export class WebServer {
                 'alert-rule-change',
                 'billing-config-change',
                 'export',
+                'import',
                 'purge',
                 'user-create',
                 'user-delete',
+                'user-bulk-delete',
+                'user-role-change',
+                'user-bulk-role-change',
                 'password-change',
+                'password-reset',
                 'stream-start',
-                'stream-stop'
+                'stream-stop',
+                'account-unlocked',
+                'account-lock',
+                'account-status-change'
             ];
             const actionFilter = action && allowedActions.includes(action as AuditAction) ? (action as AuditAction) : undefined;
             if (action && !actionFilter) {
                 return res.status(400).json({ success: false, error: 'Invalid audit action filter' });
             }
             const parsedLimit = limit ? Number.parseInt(limit, 10) : 500;
-            const logs = this.auditLogger.getLogs({
+            const parsedOffset = offset ? Number.parseInt(offset, 10) : 0;
+            const result = this.auditLogger.getLogs({
                 action: actionFilter,
                 user,
                 startDate,
                 endDate,
-                limit: Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 1000) : 500
+                ipAddress,
+                limit: Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 10000) : 500,
+                offset: Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0
             });
-            res.json(logs);
+
+            res.json({ success: true, data: result.data, total: result.total });
         });
 
         // ── Billing Config ───────────────────────────────────────────────────
@@ -877,6 +1062,56 @@ export class WebServer {
                 isHoliday
             });
             res.json({ success: true, data: result });
+        });
+
+        // ── Bulk Operations ───────────────────────────────────────────────────
+        this.app.post('/api/billing/bulk', (req, res) => {
+            try {
+                if (!this.requireAdmin(req, res)) return;
+                const { action, ruleIds } = req.body as { action: 'enable' | 'disable' | 'delete'; ruleIds: string[] };
+                if (!action || !ruleIds || !Array.isArray(ruleIds)) {
+                    return res.status(400).json({ success: false, error: 'Invalid bulk action request' });
+                }
+                const result = billingEngine.bulkRuleAction({ action, ruleIds }, req.user?.username);
+                if (result.success) {
+                    this.billingConfig.save(billingEngine.getConfig());
+                }
+                res.json({ success: result.success, data: result });
+            } catch (err: any) {
+                res.status(500).json({ success: false, error: err.message });
+            }
+        });
+
+        // ── Audit History ─────────────────────────────────────────────────────
+        this.app.get('/api/billing/audit', (req, res) => {
+            try {
+                const limit = Math.min(Number(req.query.limit) || 100, 500);
+                const offset = Number(req.query.offset) || 0;
+                const auditService = (billingEngine as any).auditService;
+                if (!auditService) {
+                    return res.json({ success: true, data: { entries: [], total: 0, summary: { totalChanges: 0, rulesAdded: 0, rulesDeleted: 0, ratesChanged: 0 } } });
+                }
+                const history = auditService.getChangeHistory(limit, offset);
+                res.json({ success: true, data: history });
+            } catch (err: any) {
+                res.status(500).json({ success: false, error: err.message });
+            }
+        });
+
+        // ── Impact Analysis ───────────────────────────────────────────────────
+        this.app.post('/api/billing/impact', async (req, res) => {
+            try {
+                const { category, currentRate, proposedRate, periodDays = 30 } = req.body;
+                if (!category || currentRate === undefined || proposedRate === undefined) {
+                    return res.status(400).json({ success: false, error: 'Missing required fields' });
+                }
+                const { BillingImpactService } = await import('../billing/BillingImpactService.js');
+                const impactService = new BillingImpactService(this.service.getRawDb());
+                const analysis = impactService.analyzeProposedRateChange(category, currentRate, proposedRate, periodDays);
+                res.json({ success: true, data: analysis });
+            } catch (err: any) {
+                res.status(500).json({ success: false, error: err.message });
+            }
         });
 
         // ── Billing Report ───────────────────────────────────────────────────

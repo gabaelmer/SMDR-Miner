@@ -3,9 +3,9 @@ import { deltaBadge, formatSeconds, normalizeTransferLabel, safePercent, toCsv }
 
 describe('analytics ui helpers', () => {
   it('normalizes transfer labels', () => {
-    expect(normalizeTransferLabel('T')).toBe('T - Transfer');
-    expect(normalizeTransferLabel('X')).toBe('X - Conference');
-    expect(normalizeTransferLabel('C')).toBe('C - Conference');
+    expect(normalizeTransferLabel('T')).toBe('Supervised Transfer');
+    expect(normalizeTransferLabel('X')).toBe('Blind Transfer');
+    expect(normalizeTransferLabel('C')).toBe('Conference');
     expect(normalizeTransferLabel('none')).toBe('None');
   });
 

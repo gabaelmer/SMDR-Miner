@@ -101,18 +101,16 @@ export function DashboardPage() {
   const outboundPct = totalExternal > 0 ? Math.round((dashboard.outboundCalls / totalExternal) * 100) : 0;
 
   return (
-    <div className="gap">
-      <div className="card" style={{ padding: '12px 16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <span className="ct">Dashboard Overview</span>
-            <span className="cs">{selectedDate}</span>
-            <span className="cs">
-              Updated: {dashboard.lastUpdatedAt ? dayjs(dashboard.lastUpdatedAt).format('MMM D, YYYY HH:mm:ss') : 'n/a'}
-            </span>
+    <div className="gap" style={{ gap: '12px' }}>
+      {/* Header Card */}
+      <div className="card" style={{ padding: '12px 18px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <span className="ct" style={{ fontSize: '15px' }}>Dashboard Overview</span>
+            <span className="cs" style={{ fontSize: '12px' }}>{selectedDate}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {dashboard.activeStream ? <span className="live-badge"><span className="pr"></span>Live</span> : <span className="chip">Not live</span>}
+            {dashboard.activeStream ? <span className="live-badge" style={{ padding: '3px 9px', fontSize: '11px' }}><span className="pr"></span>Live</span> : <span className="chip" style={{ padding: '3px 9px', fontSize: '11px' }}>Not live</span>}
             <button
               type="button"
               className="btn bg2"
@@ -120,8 +118,19 @@ export function DashboardPage() {
               onClick={() => {
                 void refreshDashboard(selectedDate);
               }}
+              style={{ padding: '6px 14px', fontSize: '13px' }}
             >
-              {dashboardLoading ? 'Refreshing...' : 'Refresh'}
+              {dashboardLoading ? (
+                <>
+                  <span className="spin" style={{ fontSize: '13px' }}>⟳</span>
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M14 8a6 6 0 1 1-1.73-4.24l-1.43 1.43A4 4 0 1 0 12 8h2zm-2.83 4.24l1.43-1.43A6 6 0 1 1 14 8h-2a4 4 0 1 0-1.17 2.83z"/></svg>
+                  Refresh
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -130,86 +139,103 @@ export function DashboardPage() {
             style={{
               marginTop: '10px',
               border: '1px solid rgba(239, 68, 68, 0.35)',
-              borderRadius: '10px',
-              padding: '8px 10px',
+              borderRadius: 'var(--radius-md)',
+              padding: '8px 12px',
               color: 'var(--red)',
-              background: 'rgba(239, 68, 68, 0.08)',
+              background: 'var(--red-dim)',
               fontSize: '12px',
-              fontWeight: 700
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
             }}
           >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm1 9.5H7v-1h2v1zm0-2H7V4h2v4.5z"/></svg>
             {dashboardError}
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <button type="button" className="card metric" style={{ minHeight: '132px', textAlign: 'left' }} onClick={() => goToCallLog()}>
-          <div className="mlbl">Total Calls Today</div>
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" style={{ flexShrink: 0 }}>
+        <button type="button" className="card metric" style={{ minHeight: '115px', textAlign: 'left', padding: '14px 16px' }} onClick={() => goToCallLog()}>
+          <div className="mlbl" style={{ fontSize: '10px' }}>Total Calls</div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div className="mval" style={{ color: 'var(--brand)' }}>{dashboard.totalCallsToday}</div>
-            <div className="macc" style={{ background: 'var(--brand)' }}></div>
+            <div className="mval" style={{ color: 'var(--brand)', fontSize: '26px' }}>{dashboard.totalCallsToday}</div>
+            <div className="macc" style={{ background: 'var(--brand)', height: '28px' }}></div>
           </div>
-          <div className="msub">Tap to open call log</div>
+          <div className="msub" style={{ fontSize: '11px' }}>Tap to view</div>
         </button>
         <button
           type="button"
           className="card metric"
-          style={{ minHeight: '132px', textAlign: 'left' }}
+          style={{ minHeight: '115px', textAlign: 'left', padding: '14px 16px' }}
           onClick={() => goToCallLog({ callType: 'internal' })}
         >
-          <div className="mlbl">Internal Calls</div>
+          <div className="mlbl" style={{ fontSize: '10px' }}>Internal</div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div className="mval" style={{ color: 'var(--purple)' }}>{dashboard.internalCalls}</div>
-            <div className="macc" style={{ background: 'var(--purple)' }}></div>
+            <div className="mval" style={{ color: 'var(--purple)', fontSize: '26px' }}>{dashboard.internalCalls}</div>
+            <div className="macc" style={{ background: 'var(--purple)', height: '28px' }}></div>
           </div>
-          <div className="msub" style={{ color: 'var(--purple)' }}>{formatDuration(dashboard.internalDurationSeconds)} today</div>
+          <div className="msub" style={{ color: 'var(--purple)', fontSize: '11px' }}>{formatDuration(dashboard.internalDurationSeconds)}</div>
         </button>
         <button
           type="button"
           className="card metric"
-          style={{ minHeight: '132px', textAlign: 'left' }}
+          style={{ minHeight: '115px', textAlign: 'left', padding: '14px 16px' }}
           onClick={() => goToCallLog({ callType: 'external' })}
         >
-          <div className="mlbl">Inbound Calls</div>
+          <div className="mlbl" style={{ fontSize: '10px' }}>Inbound</div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <div className="mval">{dashboard.inboundCalls}</div>
-            <div className="macc" style={{ background: 'var(--brand)' }}></div>
+            <div className="macc" style={{ background: 'var(--brand)', height: '28px' }}></div>
           </div>
-          <div className="msub" style={{ color: 'var(--brand)' }}>{formatDuration(dashboard.inboundDurationSeconds)} today</div>
+          <div className="msub" style={{ color: 'var(--brand)', fontSize: '11px' }}>{formatDuration(dashboard.inboundDurationSeconds)}</div>
         </button>
         <button
           type="button"
           className="card metric"
-          style={{ minHeight: '132px', textAlign: 'left' }}
+          style={{ minHeight: '115px', textAlign: 'left', padding: '14px 16px' }}
           onClick={() => goToCallLog({ callType: 'external' })}
         >
-          <div className="mlbl">Outbound Calls</div>
+          <div className="mlbl" style={{ fontSize: '10px' }}>Outbound</div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <div className="mval">{dashboard.outboundCalls}</div>
-            <div className="macc" style={{ background: 'var(--green)' }}></div>
+            <div className="macc" style={{ background: 'var(--green)', height: '28px' }}></div>
           </div>
-          <div className="msub" style={{ color: 'var(--green)' }}>{formatDuration(dashboard.outboundDurationSeconds)} today</div>
+          <div className="msub" style={{ color: 'var(--green)', fontSize: '11px' }}>{formatDuration(dashboard.outboundDurationSeconds)}</div>
         </button>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-3">
-        <div className="card" style={{ padding: '14px 16px', minHeight: '360px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <div className="ct">Inbound vs Outbound</div>
-            <div className="cs">External calls</div>
+      {/* Main Content Grid - Charts and Extensions */}
+      <div className="grid gap-3 xl:grid-cols-3" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {/* Inbound vs Outbound Card */}
+        <div className="card" style={{ padding: '14px 16px', minHeight: '300px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexShrink: 0 }}>
+            <div className="ct" style={{ fontSize: '14px' }}>Inbound vs Outbound</div>
+            <div className="cs" style={{ fontSize: '11px' }}>External</div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-            <div style={{ position: 'relative', width: '160px', height: '160px', flexShrink: 0 }}>
-              <svg viewBox="0 0 100 100" width="160" height="160">
-                <circle cx="50" cy="50" r="38" fill="none" stroke="#101f3f" strokeWidth="14" />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', flex: 1 }}>
+            <div style={{ position: 'relative', width: '140px', height: '140px', flexShrink: 0 }}>
+              <svg viewBox="0 0 100 100" width="140" height="140">
+                <defs>
+                  <linearGradient id="inboundGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="var(--brand)" />
+                    <stop offset="100%" stopColor="var(--brand2)" />
+                  </linearGradient>
+                  <linearGradient id="outboundGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="var(--green)" />
+                    <stop offset="100%" stopColor="#1a9f6e" />
+                  </linearGradient>
+                </defs>
+                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--surface-alt)" strokeWidth="14" />
                 {dashboard.inboundCalls > 0 && (
                   <circle
                     cx="50"
                     cy="50"
                     r="38"
                     fill="none"
-                    stroke="#2484eb"
+                    stroke="url(#inboundGrad)"
                     strokeWidth="14"
                     strokeDasharray={`${(inboundPct / 100) * 239} ${239}`}
                     strokeDashoffset="0"
@@ -223,7 +249,7 @@ export function DashboardPage() {
                     cy="50"
                     r="38"
                     fill="none"
-                    stroke="#26b67f"
+                    stroke="url(#outboundGrad)"
                     strokeWidth="14"
                     strokeDasharray={`${(outboundPct / 100) * 239} ${239}`}
                     strokeDashoffset={-(inboundPct / 100) * 239}
@@ -233,16 +259,16 @@ export function DashboardPage() {
                 )}
               </svg>
               <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-                <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text)' }}>{totalExternal}</div>
-                <div style={{ fontSize: '10px', color: 'var(--muted2)' }}>external</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text)' }}>{totalExternal}</div>
+                <div style={{ fontSize: '9px', color: 'var(--muted2)', textTransform: 'uppercase' }}>external</div>
               </div>
             </div>
 
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '11px' }}>
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--brand)' }}></div>
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)' }}>Inbound</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>Inbound</span>
                   <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--brand)', marginLeft: 'auto' }}>{inboundPct}%</span>
                 </div>
                 <div style={{ height: '6px', background: 'var(--surface-alt)', borderRadius: '3px', overflow: 'hidden' }}>
@@ -250,9 +276,9 @@ export function DashboardPage() {
                 </div>
               </div>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'var(--green)' }}></div>
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)' }}>Outbound</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>Outbound</span>
                   <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--green)', marginLeft: 'auto' }}>{outboundPct}%</span>
                 </div>
                 <div style={{ height: '6px', background: 'var(--surface-alt)', borderRadius: '3px', overflow: 'hidden' }}>
@@ -263,47 +289,53 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="card" style={{ padding: '14px 16px', minHeight: '360px' }}>
-          <div className="ct" style={{ marginBottom: '14px' }}>7-day Trend</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {/* 7-day Trend Card */}
+        <div className="card" style={{ padding: '14px 16px', minHeight: '300px', display: 'flex', flexDirection: 'column' }}>
+          <div className="ct" style={{ marginBottom: '12px', fontSize: '14px', flexShrink: 0 }}>7-day Trend</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, overflow: 'hidden' }}>
             {trendRows.map((row) => (
-              <div key={row.date} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '38px', fontSize: '12px', fontWeight: 700, color: 'var(--text)', textAlign: 'right' }}>{row.label}</div>
-                <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <div style={{ flex: 1, height: '9px', background: 'var(--surface-alt)', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: `${(row.callCount / maxTrendCalls) * 100}%`, height: '100%', background: 'var(--brand)' }}></div>
+              <div key={row.date} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '32px', fontSize: '11px', fontWeight: 600, color: 'var(--text)', textAlign: 'right' }}>{row.label}</div>
+                <div style={{ flex: 1, display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <div style={{ flex: 1, height: '8px', background: 'var(--surface-alt)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${(row.callCount / maxTrendCalls) * 100}%`, height: '100%', background: 'linear-gradient(90deg, var(--brand), var(--brand2))', borderRadius: '4px' }}></div>
                   </div>
-                  <div style={{ flex: 1, height: '9px', background: 'var(--surface-alt)', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: `${(row.totalCost / maxTrendCost) * 100}%`, height: '100%', background: 'var(--purple)' }}></div>
+                  <div style={{ flex: 1, height: '8px', background: 'var(--surface-alt)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${(row.totalCost / maxTrendCost) * 100}%`, height: '100%', background: 'linear-gradient(90deg, var(--purple), #7c3aed)', borderRadius: '4px' }}></div>
                   </div>
                 </div>
-                <div style={{ width: '36px', fontSize: '12px', fontWeight: 700, textAlign: 'right' }}>{row.callCount}</div>
+                <div style={{ width: '32px', fontSize: '11px', fontWeight: 600, textAlign: 'right', color: 'var(--text)' }}>{row.callCount}</div>
               </div>
             ))}
-            {trendRows.length === 0 && <p style={{ fontSize: '11px', color: 'var(--muted2)', textAlign: 'center', padding: '16px 0' }}>No trend data available</p>}
+            {trendRows.length === 0 && (
+              <div className="empty-state" style={{ padding: '24px 12px' }}>
+                <div className="empty-state-title" style={{ fontSize: '13px' }}>No trend data</div>
+              </div>
+            )}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--border2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '14px', height: '8px', background: 'var(--brand)', borderRadius: '4px' }}></div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text)' }}>Volume</span>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border2)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '14px', height: '7px', background: 'linear-gradient(90deg, var(--brand), var(--brand2))', borderRadius: '3px' }}></div>
+              <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text)' }}>Volume</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '14px', height: '8px', background: 'var(--purple)', borderRadius: '4px' }}></div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text)' }}>Cost</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '14px', height: '7px', background: 'linear-gradient(90deg, var(--purple), #7c3aed)', borderRadius: '3px' }}></div>
+              <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text)' }}>Cost</span>
             </div>
           </div>
         </div>
 
-        <div className="card" style={{ padding: '14px 16px', minHeight: '360px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <div className="ct">Top Extensions (Cost + Volume)</div>
-            <span className="cs">Click row to drill down</span>
+        {/* Top Extensions Card */}
+        <div className="card" style={{ padding: '14px 16px', minHeight: '300px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexShrink: 0 }}>
+            <div className="ct" style={{ fontSize: '14px' }}>Top Extensions</div>
+            <span className="cs" style={{ fontSize: '11px' }}>Click to filter</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '8px', fontSize: '10px', color: 'var(--muted2)', fontWeight: 700 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px', fontSize: '10px', color: 'var(--muted2)', fontWeight: 700, textTransform: 'uppercase', flexShrink: 0 }}>
             <div>Extension</div>
             <div style={{ textAlign: 'right' }}>Calls / Cost</div>
           </div>
-          <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px' }}>
             {topExtensions.map((row) => (
               <button
                 type="button"
@@ -312,57 +344,69 @@ export function DashboardPage() {
                 style={{ width: '100%', background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', padding: '8px 0' }}
                 onClick={() => goToCallLog({ extension: row.extension })}
               >
-                <span className="mono" style={{ width: '52px', color: 'var(--text)', fontWeight: 700 }}>{row.extension}</span>
-                <div className="etrk">
+                <span className="mono" style={{ width: '48px', color: 'var(--text)', fontWeight: 700, fontSize: '12px' }}>{row.extension}</span>
+                <div className="etrk" style={{ height: '5px' }}>
                   <div className="efil" style={{ width: `${Math.max((row.count / maxExtensionCalls) * 100, 4)}%`, background: 'linear-gradient(90deg, var(--brand), var(--purple))' }}></div>
                 </div>
-                <div style={{ fontSize: '10px', color: 'var(--muted2)', width: '92px', textAlign: 'right' }}>
-                  <div style={{ fontWeight: 700, color: 'var(--text)' }}>{row.count} calls</div>
-                  <div style={{ color: 'var(--brand)', fontWeight: 700 }}>{formatCurrency(row.totalCost)}</div>
+                <div style={{ fontSize: '10px', color: 'var(--muted2)', width: '85px', textAlign: 'right' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--text)', fontSize: '11px' }}>{row.count}</div>
+                  <div style={{ color: 'var(--brand)', fontWeight: 700, fontSize: '11px' }}>{formatCurrency(row.totalCost)}</div>
                 </div>
               </button>
             ))}
-            {topExtensions.length === 0 && <p style={{ fontSize: '11px', color: 'var(--muted2)', textAlign: 'center', padding: '30px 0' }}>No extension activity yet</p>}
+            {topExtensions.length === 0 && (
+              <div className="empty-state" style={{ padding: '24px 12px' }}>
+                <div className="empty-state-title" style={{ fontSize: '13px' }}>No activity</div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="card metric" style={{ padding: '15px 17px' }}>
-          <div className="mlbl">Total Cost</div>
+      {/* Bottom Row - Metrics and Distribution */}
+      <div className="grid gap-3 md:grid-cols-3" style={{ flexShrink: 0 }}>
+        <div className="card metric" style={{ padding: '14px 16px' }}>
+          <div className="mlbl" style={{ fontSize: '10px' }}>Total Cost</div>
           <div className="mval" style={{ color: 'var(--orange)', fontSize: '22px' }}>{formatCurrency(dashboard.totalCostToday)}</div>
-          <div className="msub">All charges (today)</div>
+          <div className="msub" style={{ fontSize: '11px' }}>Today</div>
         </div>
-        <div className="card metric" style={{ padding: '15px 17px' }}>
-          <div className="mlbl">Avg Call Duration</div>
+        <div className="card metric" style={{ padding: '14px 16px' }}>
+          <div className="mlbl" style={{ fontSize: '10px' }}>Avg Duration</div>
           <div className="mval" style={{ color: 'var(--purple)', fontSize: '22px' }}>{formatDuration(dashboard.avgCallDurationSeconds)}</div>
-          <div className="msub">Per call average</div>
+          <div className="msub" style={{ fontSize: '11px' }}>Per call</div>
         </div>
         <button
           type="button"
           className="card metric"
-          style={{ padding: '15px 17px', textAlign: 'left' }}
+          style={{ padding: '14px 16px', textAlign: 'left' }}
           onClick={() => goToCallLog({ callType: 'external' })}
         >
-          <div className="mlbl">High-Cost Calls (&gt;₱50)</div>
+          <div className="mlbl" style={{ fontSize: '10px' }}>High-Cost (&gt;₱50)</div>
           <div className="mval" style={{ color: 'var(--red)', fontSize: '22px' }}>{dashboard.highCostCalls}</div>
-          <div className="msub">Tap to inspect call log</div>
+          <div className="msub" style={{ fontSize: '11px' }}>Tap to view</div>
         </button>
       </div>
 
-      <div className="card" style={{ padding: '14px 16px' }}>
+      {/* Call Distribution */}
+      <div className="card" style={{ padding: '14px 16px', flexShrink: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <div className="ct">Call Distribution by Type</div>
-          <span className="cs">Computed from full-day records</span>
+          <div className="ct" style={{ fontSize: '14px' }}>Call Distribution</div>
+          <span className="cs" style={{ fontSize: '11px' }}>By type</span>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
           {distributionRows.map((row) => {
             const color = categoryColor[row.category] ?? 'var(--muted2)';
             return (
-              <div key={row.category} style={{ textAlign: 'center', padding: '12px', background: 'rgba(95, 110, 136, 0.1)', borderRadius: '10px', border: '1px solid rgba(95, 110, 136, 0.2)' }}>
-                <div style={{ fontSize: '22px', fontWeight: 800, color }}>{Math.round(row.percentage)}%</div>
-                <div style={{ fontSize: '10px', color: 'var(--muted2)', marginTop: '4px', fontWeight: 700 }}>{categoryLabel(row.category)}</div>
-                <div style={{ fontSize: '10px', color: 'var(--text)', marginTop: '4px' }}>{row.count} calls</div>
+              <div key={row.category} style={{ 
+                textAlign: 'center', 
+                padding: '12px', 
+                background: 'var(--surface-alt)', 
+                borderRadius: 'var(--radius-lg)', 
+                border: '1px solid var(--border2)'
+              }}>
+                <div style={{ fontSize: '24px', fontWeight: 800, color }}>{Math.round(row.percentage)}%</div>
+                <div style={{ fontSize: '10px', color: 'var(--muted2)', marginTop: '5px', fontWeight: 700, textTransform: 'uppercase' }}>{categoryLabel(row.category)}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text)', marginTop: '3px', fontWeight: 600 }}>{row.count}</div>
                 <div style={{ fontSize: '10px', color: 'var(--brand)', marginTop: '3px', fontWeight: 700 }}>
                   {formatCurrency(row.totalCost)}
                 </div>
@@ -372,12 +416,13 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="ch">
-          <span className="ct">Long Calls (&gt;30 min)</span>
-          <span className="cs">Click a call to filter by extension</span>
+      {/* Long Calls - Horizontal scroll */}
+      <div className="card" style={{ flexShrink: 0 }}>
+        <div className="ch" style={{ padding: '12px 16px' }}>
+          <span className="ct" style={{ fontSize: '14px' }}>Long Calls (&gt;30 min)</span>
+          <span className="cs" style={{ fontSize: '11px' }}>Click to filter</span>
         </div>
-        <div className="grid grid-cols-1 gap-2 p-3 md:grid-cols-2 xl:grid-cols-3">
+        <div style={{ display: 'flex', gap: '10px', padding: '12px 16px', overflowX: 'auto' }}>
           {dashboard.longCalls.slice(0, 9).map((record, idx) => (
             <button
               type="button"
@@ -385,25 +430,27 @@ export function DashboardPage() {
               onClick={() => goToCallLog({ extension: record.callingParty })}
               style={{
                 background: 'var(--surface-alt)',
-                borderRadius: '9px',
-                padding: '10px 12px',
+                borderRadius: 'var(--radius-lg)',
+                padding: '12px 14px',
                 border: '1px solid var(--border2)',
                 textAlign: 'left',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                flexShrink: 0,
+                minWidth: '200px'
               }}
             >
-              <div style={{ fontSize: '12px', fontWeight: 700 }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)' }}>
                 {record.callingParty} → {record.calledParty}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--muted2)', marginTop: '2px' }}>
-                {record.startTime} · <strong style={{ color: 'var(--orange)' }}>{record.duration}</strong>
+              <div style={{ fontSize: '11px', color: 'var(--muted2)', marginTop: '5px' }}>
+                <span>{record.startTime}</span> · <strong style={{ color: 'var(--orange)', fontSize: '11px' }}>{record.duration}</strong>
               </div>
             </button>
           ))}
           {dashboard.longCalls.length === 0 && (
-            <p style={{ fontSize: '11px', color: 'var(--muted2)', textAlign: 'center', padding: '20px 0', gridColumn: '1 / -1' }}>
-              No long calls detected today
-            </p>
+            <div style={{ padding: '24px', color: 'var(--muted2)', fontSize: '13px', textAlign: 'center' }}>
+              No long calls today
+            </div>
           )}
         </div>
       </div>

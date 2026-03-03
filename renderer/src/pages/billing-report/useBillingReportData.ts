@@ -20,6 +20,12 @@ interface AppliedFilters {
   category: FilterCategory;
 }
 
+function normalizeInput(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
 export function useBillingReportData() {
   const today = dayjs().format('YYYY-MM-DD');
   const defaultFrom = dayjs().subtract(6, 'day').format('YYYY-MM-DD');
@@ -104,9 +110,9 @@ export function useBillingReportData() {
     };
   }, [appliedFilters, sortBy, sortDir, page, pageSize]);
 
-  const applyFilters = () => {
-    const trimmedFrom = from.trim();
-    const trimmedTo = to.trim();
+  const applyFilters = (newFrom?: string, newTo?: string) => {
+    const trimmedFrom = normalizeInput(newFrom !== undefined ? newFrom : from);
+    const trimmedTo = normalizeInput(newTo !== undefined ? newTo : to);
     setError(null);
     if (!ISO_DATE_RE.test(trimmedFrom) || !ISO_DATE_RE.test(trimmedTo)) {
       setError('Dates must be in YYYY-MM-DD format.');
@@ -121,7 +127,7 @@ export function useBillingReportData() {
     setAppliedFilters({
       from: trimmedFrom,
       to: trimmedTo,
-      extension: extension.trim(),
+      extension: normalizeInput(extension),
       category
     });
     return true;

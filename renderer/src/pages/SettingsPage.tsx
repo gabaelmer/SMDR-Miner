@@ -27,6 +27,21 @@ const DEFAULT_CONFIG: AppConfig = {
     detectTagCalls: true,
     detectTollDenied: true
   },
+  smdrParser: {
+    extendedDigitLength: false,
+    aniDnisReporting: false,
+    networkOLI: false,
+    extendedReportingL1: false,
+    extendedReportingL2: false,
+    extendedTimeToAnswer: false,
+    networkFormat: false,
+    reportMeterPulses: false,
+    suiteServices: false,
+    twoBChannelTransfer: false,
+    externalHotDesk: false,
+    locationReporting: false,
+    twentyFourHourTime: true
+  },
   maxInMemoryRecords: 2000
 };
 
@@ -206,8 +221,6 @@ export function SettingsPage() {
   const startStream = useAppStore((state) => state.startStream);
   const stopStream = useAppStore((state) => state.stopStream);
   const purgeRecords = useAppStore((state) => state.purgeRecords);
-  const parseErrors = useAppStore((state) => state.parseErrors);
-  const refreshParseErrors = useAppStore((state) => state.refreshParseErrors);
   const connectionStatus = useAppStore((state) => state.connectionStatus);
 
   const [loading, setLoading] = useState(true);
@@ -226,42 +239,14 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [streamAction, setStreamAction] = useState<'start' | 'stop' | null>(null);
   const [purging, setPurging] = useState(false);
-  const [refreshingParseErrors, setRefreshingParseErrors] = useState(false);
-  const [parseErrorsShowAll, setParseErrorsShowAll] = useState(false);
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
-
-  // S6: User Management state
-  const [users, setUsers] = useState<User[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [newUsername, setNewUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<'admin' | 'viewer'>('viewer');
-  const [userActionError, setUserActionError] = useState<string | null>(null);
-  const [userActionSuccess, setUserActionSuccess] = useState<string | null>(null);
-  const [creatingUser, setCreatingUser] = useState(false);
-  const [deletingUser, setDeletingUser] = useState<string | null>(null);
 
   const isAdmin = currentUser?.role === 'admin';
   const fieldErrors = useMemo(() => validateConfig(draft), [draft]);
   const hasValidationErrors = Object.keys(fieldErrors).length > 0;
   const hasUnsavedChanges = useMemo(() => JSON.stringify(draft) !== JSON.stringify(savedConfig), [draft, savedConfig]);
-
-  const loadUsers = async () => {
-    if (!isAdmin) return;
-    try {
-      setUsersLoading(true);
-      const result = await api.getUsers();
-      if (Array.isArray(result)) setUsers(result);
-      else if ('users' in result) setUsers((result as { users: User[] }).users);
-      else setUsers([]);
-    } catch {
-      /* ignore */
-    } finally {
-      setUsersLoading(false);
-    }
-  };
 
   useEffect(() => {
     let mounted = true;
@@ -285,10 +270,6 @@ export function SettingsPage() {
     void bootstrap();
     return () => { mounted = false; };
   }, [config]);
-
-  useEffect(() => {
-    if (isAdmin) void loadUsers();
-  }, [isAdmin]);
 
   useEffect(() => {
     if (!hasUnsavedChanges) return undefined;
@@ -367,35 +348,6 @@ export function SettingsPage() {
     finally { setPurging(false); }
   };
 
-  const handleRefreshParseErrors = async () => {
-    try { setRefreshingParseErrors(true); setStatusError(null); await refreshParseErrors(); }
-    catch (error) { setStatusError(error instanceof Error ? error.message : 'Failed to refresh parse errors.'); }
-    finally { setRefreshingParseErrors(false); }
-  };
-
-  const handleCreateUser = async () => {
-    if (!newUsername.trim() || !newPassword.trim()) { setUserActionError('Username and password are required.'); return; }
-    try {
-      setCreatingUser(true); setUserActionError(null); setUserActionSuccess(null);
-      await api.createUser(newUsername.trim(), newPassword, newRole);
-      setNewUsername(''); setNewPassword(''); setNewRole('viewer');
-      setUserActionSuccess(`User "${newUsername.trim()}" created.`);
-      void loadUsers();
-    } catch (e) { setUserActionError(e instanceof Error ? e.message : 'Failed to create user.'); }
-    finally { setCreatingUser(false); }
-  };
-
-  const handleDeleteUser = async (username: string) => {
-    if (username === currentUser?.username) { setUserActionError('You cannot delete your own account.'); return; }
-    try {
-      setDeletingUser(username); setUserActionError(null); setUserActionSuccess(null);
-      await api.deleteUser(username);
-      setUserActionSuccess(`User "${username}" deleted.`);
-      void loadUsers();
-    } catch (e) { setUserActionError(e instanceof Error ? e.message : 'Failed to delete user.'); }
-    finally { setDeletingUser(null); }
-  };
-
   if (loading) {
     return (
       <div className="card p-3">
@@ -403,8 +355,6 @@ export function SettingsPage() {
       </div>
     );
   }
-
-  const visibleParseErrors = parseErrorsShowAll ? parseErrors : parseErrors.slice(0, 5);
 
   return (
     <div className="h-[calc(100vh-148px)] min-h-0 overflow-hidden flex flex-col gap-2">
@@ -439,6 +389,84 @@ export function SettingsPage() {
         </div>
       )}
 
+      {/* System Control - Full width row at top */}
+      <div className="card p-3">
+        <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>System Control</p>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Configuration Actions - Left Side */}
+          <div>
+            <div className="flex items-center justify-between mb-2 min-h-[28px]">
+              <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Configuration</p>
+              <span className="invisible" aria-hidden="true">
+                <ConnectionStatusBadge status={connectionStatus} />
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className="h-9 rounded-2xl border px-3 text-lg font-semibold tracking-tight text-white disabled:opacity-50"
+                style={{
+                  borderColor: 'rgba(38, 182, 127, 0.95)',
+                  background: 'linear-gradient(180deg, #24c983 0%, #1ea86e 100%)',
+                  boxShadow: '0 0 0 1px rgba(38, 182, 127, 0.35), 0 6px 16px rgba(38, 182, 127, 0.25)'
+                }}
+                onClick={handleSave}
+                disabled={!isAdmin || saving || hasValidationErrors || !hasUnsavedChanges}
+              >
+                {saving ? 'Saving…' : 'Save Config'}
+              </button>
+              <button
+                className="h-9 rounded-2xl border bg-transparent px-3 text-lg font-semibold tracking-tight disabled:opacity-50"
+                style={{
+                  borderColor: 'rgba(122, 138, 168, 0.75)',
+                  color: 'var(--text-muted)',
+                  boxShadow: 'inset 0 0 0 1px rgba(122, 138, 168, 0.08)'
+                }}
+                onClick={handleRevert}
+                disabled={!isAdmin || !hasUnsavedChanges || saving}
+              >
+                Revert
+              </button>
+            </div>
+          </div>
+
+          {/* Stream Control - Right Side */}
+          <div>
+            <div className="flex items-center justify-between mb-2 min-h-[28px]">
+              <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Stream Control</p>
+              <ConnectionStatusBadge status={connectionStatus} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className="h-9 rounded-2xl border bg-transparent px-3 text-lg font-semibold tracking-tight disabled:opacity-50"
+                style={{
+                  borderColor: 'rgba(38, 182, 127, 0.95)',
+                  color: '#22e08e',
+                  boxShadow: 'inset 0 0 0 1px rgba(38, 182, 127, 0.08)'
+                }}
+                onClick={handleStartStream}
+                disabled={!isAdmin || streamAction !== null}
+              >
+                {streamAction === 'start' ? 'Starting…' : 'Start Stream'}
+              </button>
+              <button
+                className="h-9 rounded-2xl border bg-transparent px-3 text-lg font-semibold tracking-tight disabled:opacity-50"
+                style={{
+                  borderColor: 'rgba(239, 68, 68, 0.95)',
+                  color: '#ff4f67',
+                  boxShadow: 'inset 0 0 0 1px rgba(239, 68, 68, 0.08)'
+                }}
+                onClick={handleStopStream}
+                disabled={!isAdmin || streamAction !== null}
+              >
+                {streamAction === 'stop' ? 'Stopping…' : 'Stop Stream'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Settings Grid - 2 columns */}
       <div className="grid gap-2 lg:grid-cols-2 min-h-0 flex-1 overflow-auto pr-1 content-start">
 
         {/* Connection Settings — S1 status badge header */}
@@ -539,10 +567,147 @@ export function SettingsPage() {
           </fieldset>
         </div>
 
+        {/* SMDR Parser Configuration - Mitel Spec Compliance */}
+        <div className="card p-4">
+          <p className="text-base font-bold" style={{ color: 'var(--text)' }}>SMDR Parser Configuration</p>
+          <p className="mt-2 text-sm mb-4" style={{ color: 'var(--muted)' }}>
+            Configure parsing options for MiVoice Business SMDR records. These options affect how records are interpreted.
+          </p>
+          <fieldset disabled={!isAdmin} className="grid gap-4 lg:grid-cols-2 disabled:opacity-70">
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.extendedDigitLength}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, extendedDigitLength: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              Extended Digit Length
+              <span className="text-sm" style={{ color: 'var(--muted)' }}>(Duration hhhh:mm:ss, 7-digit parties)</span>
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.aniDnisReporting}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, aniDnisReporting: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              ANI/DNIS Reporting
+              <span className="text-sm" style={{ color: 'var(--muted)' }}>(Caller ID & Dialed Number)</span>
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.networkOLI}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, networkOLI: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              Network OLI
+              <span className="text-sm" style={{ color: 'var(--muted)' }}>(Call Identifier & Sequence)</span>
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.extendedReportingL1}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, extendedReportingL1: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              Extended Reporting L1
+              <span className="text-sm" style={{ color: 'var(--muted)' }}>(Suite ID, EHDU, 2B Transfer)</span>
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.extendedReportingL2}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, extendedReportingL2: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              Extended Reporting L2
+              <span className="text-sm" style={{ color: 'var(--muted)' }}>(Location Information)</span>
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.extendedTimeToAnswer}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, extendedTimeToAnswer: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              Extended Time to Answer
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.networkFormat}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, networkFormat: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              Network Format (DPNSS)
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.reportMeterPulses}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, reportMeterPulses: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              Report Meter Pulses
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.suiteServices}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, suiteServices: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              Suite Services
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.twoBChannelTransfer}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, twoBChannelTransfer: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              Two B-Channel Transfer
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.externalHotDesk}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, externalHotDesk: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              External Hot Desk User
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.locationReporting}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, locationReporting: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              Location Reporting
+            </label>
+            <label className="flex items-center gap-3 text-base" style={{ color: 'var(--text)' }}>
+              <input
+                type="checkbox"
+                checked={draft.smdrParser.twentyFourHourTime}
+                onChange={(e) => setDraft((prev) => ({ ...prev, smdrParser: { ...prev.smdrParser, twentyFourHourTime: e.target.checked } }))}
+                className="w-5 h-5"
+              />
+              24-Hour Time Format
+            </label>
+          </fieldset>
+          <div className="mt-4 p-4 rounded-xl" style={{ background: 'var(--surface-alt)' }}>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>
+              <strong>Auto-detection:</strong> The parser automatically detects the record format. Enable options that match your MiVoice Business configuration.
+            </p>
+          </div>
+        </div>
+
         {/* Storage & Runtime */}
         <div className="card p-3">
           <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Storage & Runtime</p>
-          <p className="mt-1 text-sm mb-3" style={{ color: 'var(--muted)' }}>Control data retention and in-memory buffer size.</p>
+          <p className="mt-1 text-sm mb-3" style={{ color: 'var(--muted)' }}>Control data retention, in-memory buffer size, and stream control.</p>
           <fieldset disabled={!isAdmin} className="grid gap-3 lg:grid-cols-2 disabled:opacity-70">
             <label className="text-sm" style={{ color: 'var(--text)' }}>
               Retention Days
@@ -555,6 +720,37 @@ export function SettingsPage() {
               {fieldErrors.maxInMemoryRecords && <p className="mt-1 text-xs text-red-400">{fieldErrors.maxInMemoryRecords}</p>}
             </label>
           </fieldset>
+
+          {/* Danger Zone */}
+          <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <span style={{ color: '#ef4444', fontSize: 16 }}>⚠</span>
+              <p className="text-sm font-semibold text-red-400">Danger Zone</p>
+            </div>
+            <p className="text-sm mb-3" style={{ color: 'var(--muted)' }}>
+              Records older than the selected threshold will be permanently deleted.
+            </p>
+            <div className="flex flex-wrap gap-3 items-end">
+              <label className="text-sm" style={{ color: 'var(--text)' }}>
+                Purge older than (days)
+                <input
+                  value={purgeDays}
+                  onChange={(e) => setPurgeDays(e.target.value)}
+                  className="mt-1 w-full rounded-2xl border px-3 py-2"
+                  style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)', maxWidth: 160 }}
+                  type="number" min={1} max={3650}
+                  disabled={!isAdmin}
+                />
+              </label>
+              <button
+                className="rounded-2xl border border-red-700 px-3 py-2 text-sm font-semibold text-red-300 disabled:opacity-50"
+                onClick={openPurgeModal}
+                disabled={!isAdmin || purging || purgeEstimateLoading}
+              >
+                {purgeEstimateLoading ? 'Estimating…' : 'Purge Data'}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Alert Rules — S4: Watch Numbers chip input */}
@@ -597,191 +793,6 @@ export function SettingsPage() {
               Detect Toll Denied
             </label>
           </fieldset>
-        </div>
-
-        {/* S7: Configuration card (Save / Revert only) */}
-        <div className="card p-3">
-          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text)' }}>Configuration</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button
-              className="rounded-2xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              onClick={handleSave}
-              disabled={!isAdmin || saving || hasValidationErrors || !hasUnsavedChanges}
-            >
-              {saving ? 'Saving…' : 'Save Configuration'}
-            </button>
-            <button
-              className="rounded-2xl border px-3 py-2 text-sm font-semibold disabled:opacity-50"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-              onClick={handleRevert}
-              disabled={!isAdmin || !hasUnsavedChanges || saving}
-            >
-              Revert Changes
-            </button>
-          </div>
-        </div>
-
-        {/* S7: Stream Control card (Start / Stop stream only, with live status) */}
-        <div className="card p-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Stream Control</p>
-            <ConnectionStatusBadge status={connectionStatus} />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button
-              className="rounded-2xl border px-3 py-2 text-sm font-semibold disabled:opacity-50"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-              onClick={handleStartStream}
-              disabled={!isAdmin || streamAction !== null}
-            >
-              {streamAction === 'start' ? 'Starting…' : '▶ Start Stream'}
-            </button>
-            <button
-              className="rounded-2xl border px-3 py-2 text-sm font-semibold disabled:opacity-50"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-              onClick={handleStopStream}
-              disabled={!isAdmin || streamAction !== null}
-            >
-              {streamAction === 'stop' ? 'Stopping…' : '⏹ Stop Stream'}
-            </button>
-          </div>
-        </div>
-
-        {/* S6: User Management */}
-        {isAdmin && (
-          <div className="card p-3 lg:col-span-2">
-            <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>User Management</p>
-
-            {userActionError && <p className="mb-2 text-xs text-red-400 font-semibold">{userActionError}</p>}
-            {userActionSuccess && <p className="mb-2 text-xs text-emerald-400 font-semibold">{userActionSuccess}</p>}
-
-            {/* Create user form */}
-            <div className="mb-4 p-3 rounded-2xl" style={{ background: 'var(--surface-alt)', border: '1px solid var(--border)' }}>
-              <p className="text-xs font-semibold mb-2" style={{ color: 'var(--muted2)' }}>Create New User</p>
-              <div className="flex flex-wrap gap-2 items-end">
-                <label className="text-xs" style={{ color: 'var(--text)' }}>
-                  Username
-                  <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="username" className="mt-1 block rounded-xl border px-2 py-1.5 text-sm w-36" style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-                </label>
-                <label className="text-xs" style={{ color: 'var(--text)' }}>
-                  Password
-                  <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="••••••••" className="mt-1 block rounded-xl border px-2 py-1.5 text-sm w-36" style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-                </label>
-                <label className="text-xs" style={{ color: 'var(--text)' }}>
-                  Role
-                  <select value={newRole} onChange={(e) => setNewRole(e.target.value as 'admin' | 'viewer')} className="mt-1 block rounded-xl border px-2 py-1.5 text-sm" style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text)' }}>
-                    <option value="viewer">Viewer</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </label>
-                <button onClick={handleCreateUser} disabled={creatingUser || !newUsername.trim() || !newPassword.trim()} className="rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                  {creatingUser ? 'Creating…' : '+ Create User'}
-                </button>
-              </div>
-            </div>
-
-            {/* User list */}
-            {usersLoading ? (
-              <p className="text-xs" style={{ color: 'var(--muted)' }}>Loading users…</p>
-            ) : (
-              <div className="space-y-1.5">
-                {users.map((u) => (
-                  <div key={u.username} className="flex items-center justify-between rounded-2xl border px-3 py-2" style={{ borderColor: 'var(--border)' }}>
-                    <div>
-                      <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{u.username}</span>
-                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: u.role === 'admin' ? 'rgba(36,132,235,0.15)' : 'rgba(100,116,139,0.15)', color: u.role === 'admin' ? 'var(--brand)' : 'var(--muted2)' }}>
-                        {u.role}
-                      </span>
-                      {u.last_login && <span className="ml-3 text-xs" style={{ color: 'var(--muted2)' }}>Last login: {new Date(u.last_login).toLocaleDateString()}</span>}
-                    </div>
-                    <button
-                      onClick={() => void handleDeleteUser(u.username)}
-                      disabled={deletingUser === u.username || u.username === currentUser?.username}
-                      className="rounded-lg border px-2.5 py-1 text-xs font-semibold border-red-700 text-red-400 disabled:opacity-40"
-                    >
-                      {deletingUser === u.username ? '…' : 'Delete'}
-                    </button>
-                  </div>
-                ))}
-                {users.length === 0 && <p className="text-xs" style={{ color: 'var(--muted)' }}>No users found.</p>}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* S5: Parse Errors with total count + Show More */}
-        <div className="card p-3">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
-              Recent Parse Errors
-              {parseErrors.length > 0 && (
-                <span className="ml-2 text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(239,68,68,0.15)', color: '#fca5a5' }}>
-                  {parseErrors.length}
-                </span>
-              )}
-            </p>
-            <button
-              onClick={handleRefreshParseErrors}
-              className="rounded-2xl border px-3 py-2 text-sm font-semibold disabled:opacity-50"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-              disabled={refreshingParseErrors}
-            >
-              {refreshingParseErrors ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
-          <div className="space-y-2 max-h-[300px] overflow-auto pr-1">
-            {visibleParseErrors.map((error, index) => (
-              <div key={`${error.createdAt ?? 'na'}-${index}`} className="rounded-2xl border p-3" style={{ borderColor: 'var(--border)' }}>
-                <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>{error.reason}</p>
-                <p className="mt-1 break-all text-xs" style={{ color: 'var(--muted)' }}>{error.line}</p>
-                <p className="mt-1 text-[11px]" style={{ color: 'var(--muted)' }}>{error.createdAt}</p>
-              </div>
-            ))}
-            {parseErrors.length === 0 ? (
-              <p className="text-xs" style={{ color: 'var(--muted)' }}>No parse errors recorded.</p>
-            ) : (
-              parseErrors.length > 5 && (
-                <button
-                  onClick={() => setParseErrorsShowAll((v) => !v)}
-                  className="text-xs font-semibold mt-1"
-                  style={{ color: 'var(--brand)' }}
-                >
-                  {parseErrorsShowAll ? '▲ Show less' : `▼ Show all ${parseErrors.length} errors`}
-                </button>
-              )
-            )}
-          </div>
-        </div>
-
-        {/* S8: Danger Zone — red left-border accent */}
-        <div className="card p-3" style={{ borderLeftWidth: 3, borderLeftColor: '#ef4444', borderLeftStyle: 'solid' }}>
-          <div className="flex items-center gap-2 mb-1">
-            <span style={{ color: '#ef4444', fontSize: 16 }}>⚠</span>
-            <p className="text-sm font-semibold text-red-400">Danger Zone</p>
-          </div>
-          <p className="text-sm mb-3" style={{ color: 'var(--muted)' }}>
-            Records older than the selected threshold will be permanently deleted.
-          </p>
-          <div className="flex flex-wrap gap-3 items-end">
-            <label className="text-sm" style={{ color: 'var(--text)' }}>
-              Purge older than (days)
-              <input
-                value={purgeDays}
-                onChange={(e) => setPurgeDays(e.target.value)}
-                className="mt-1 w-full rounded-2xl border px-3 py-2"
-                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)', maxWidth: 160 }}
-                type="number" min={1} max={3650}
-                disabled={!isAdmin}
-              />
-            </label>
-            <button
-              className="rounded-2xl border border-red-700 px-3 py-2 text-sm font-semibold text-red-300 disabled:opacity-50"
-              onClick={openPurgeModal}
-              disabled={!isAdmin || purging || purgeEstimateLoading}
-            >
-              {purgeEstimateLoading ? 'Estimating…' : 'Purge Data'}
-            </button>
-          </div>
         </div>
       </div>
 

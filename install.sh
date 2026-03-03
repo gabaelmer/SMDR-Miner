@@ -9,13 +9,14 @@ set -euo pipefail
 
 APP_NAME="SMDR Insight"
 SERVICE_NAME="smdr-insight"
-INSTALL_DIR="/opt/smdr-insight"
-REPO_URL="https://github.com/gabaelmer/SMDR-Miner.git"
-REPO_REF="main"
-SERVICE_USER="smdr"
-BACKUP_DIR="/var/backups/smdr-insight"
-ENV_FILE="/etc/default/smdr-insight"
-DEFAULT_PORT=61593
+INSTALL_DIR="${SMDR_INSTALL_DIR:-/opt/smdr-insight}"
+REPO_URL="${SMDR_REPO_URL:-https://github.com/gabaelmer/SMDR-Miner.git}"
+REPO_REF="${SMDR_REPO_REF:-main}"
+SERVICE_USER="${SMDR_SERVICE_USER:-smdr}"
+SERVICE_GROUP=""
+BACKUP_DIR="${SMDR_BACKUP_DIR:-/var/backups/smdr-insight}"
+ENV_FILE="${SMDR_ENV_FILE:-/etc/default/smdr-insight}"
+DEFAULT_PORT="${SMDR_DEFAULT_PORT:-61593}"
 PORT="$DEFAULT_PORT"
 ENABLE_FIREWALL=1
 
@@ -32,17 +33,56 @@ log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
 usage() {
   cat <<EOF
-Usage: sudo bash install.sh [options]
+Usage: bash install.sh [options]
+Run as root directly, or run via sudo from any user account.
 
 Options:
   --port <number>           HTTPS listen port (default: ${DEFAULT_PORT})
   --install-dir <path>      Install directory (default: ${INSTALL_DIR})
   --repo-url <url>          Git repository URL (default: ${REPO_URL})
   --repo-ref <ref>          Git branch/tag/sha to install (default: ${REPO_REF})
-  --service-user <user>     Linux user to run service (default: ${SERVICE_USER})
+  --service-user <user>     Linux user to run service. Use "root", "current", or any username (default: ${SERVICE_USER})
   --no-firewall             Skip ufw configuration
   -h, --help                Show this help
+
+Environment overrides:
+  SMDR_INSTALL_DIR          Default install directory
+  SMDR_REPO_URL             Default git repository URL
+  SMDR_REPO_REF             Default git ref (branch/tag/sha)
+  SMDR_SERVICE_USER         Default Linux service user
+  SMDR_BACKUP_DIR           Default backup directory
+  SMDR_ENV_FILE             Default runtime env file path
+  SMDR_DEFAULT_PORT         Default HTTPS port
 EOF
+}
+
+resolve_service_user() {
+  if [[ -z "$SERVICE_USER" ]]; then
+    log_error "--service-user cannot be empty."
+    exit 1
+  fi
+
+  if [[ "$SERVICE_USER" == "current" ]]; then
+    if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+      SERVICE_USER="${SUDO_USER}"
+    else
+      SERVICE_USER="$(id -un)"
+    fi
+  fi
+
+  if [[ "$SERVICE_USER" == "root" ]]; then
+    SERVICE_GROUP="root"
+    return
+  fi
+
+  if [[ ! "$SERVICE_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
+    log_error "Invalid --service-user value: ${SERVICE_USER}"
+    exit 1
+  fi
+
+  if id -u "$SERVICE_USER" >/dev/null 2>&1; then
+    SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -90,9 +130,22 @@ fi
 
 require_root() {
   if [[ "$EUID" -ne 0 ]]; then
-    log_error "Run as root (or with sudo)."
+    log_error "Run as root (or with sudo). This installer supports any user account when launched with sudo."
     exit 1
   fi
+}
+
+check_systemd() {
+  log_step "Checking systemd integration..."
+  if ! command -v systemctl >/dev/null 2>&1; then
+    log_error "systemctl not found. A systemd-based Ubuntu/Debian host is required."
+    exit 1
+  fi
+  if [[ ! -d /run/systemd/system ]]; then
+    log_error "Systemd does not appear to be PID 1 on this host. Full systemd integration cannot be completed."
+    exit 1
+  fi
+  log_info "Systemd detected and available."
 }
 
 run_as_service_user() {
@@ -131,6 +184,8 @@ install_system_dependencies() {
     git \
     gnupg \
     build-essential \
+    fontconfig \
+    libfontconfig1 \
     python3 \
     make \
     g++ \
@@ -174,16 +229,21 @@ ensure_service_user() {
   log_step "Preparing service user..."
   if [[ "$SERVICE_USER" == "root" ]]; then
     log_warn "Service user is root. For better security, use a dedicated user (default: smdr)."
+    SERVICE_GROUP="root"
     return
   fi
 
   if id -u "$SERVICE_USER" >/dev/null 2>&1; then
+    SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
     log_info "Using existing user: $SERVICE_USER"
+    log_info "Using existing group: $SERVICE_GROUP"
     return
   fi
 
   useradd --system --user-group --home-dir "$INSTALL_DIR" --create-home --shell /usr/sbin/nologin "$SERVICE_USER"
+  SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
   log_info "Created service user: $SERVICE_USER"
+  log_info "Created service group: $SERVICE_GROUP"
 }
 
 prepare_source() {
@@ -196,7 +256,7 @@ prepare_source() {
 
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     log_info "Existing git checkout found. Updating to ${REPO_REF}..."
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+    chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
     git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
     git -C "$INSTALL_DIR" fetch --depth 1 origin "$REPO_REF"
     git -C "$INSTALL_DIR" checkout -B "$REPO_REF" FETCH_HEAD
@@ -212,7 +272,7 @@ prepare_source() {
   fi
 
   mkdir -p "$BACKUP_DIR"
-  chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+  chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
 }
 
 build_application() {
@@ -240,7 +300,7 @@ ensure_runtime_config() {
     chmod 640 "$INSTALL_DIR/config/billing.json" || true
   fi
 
-  chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/config" "$BACKUP_DIR"
+  chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR/config" "$BACKUP_DIR"
 }
 
 set_env_value() {
@@ -299,7 +359,7 @@ Documentation=${REPO_URL}
 [Service]
 Type=simple
 User=${SERVICE_USER}
-Group=${SERVICE_USER}
+Group=${SERVICE_GROUP}
 WorkingDirectory=${INSTALL_DIR}
 Environment=NODE_ENV=production
 EnvironmentFile=-${ENV_FILE}
@@ -391,14 +451,24 @@ print_summary() {
 }
 
 main() {
+  require_root
+  resolve_service_user
+
   echo ""
   echo "========================================================"
   echo " ${APP_NAME} installer (Ubuntu/Debian)"
   echo "========================================================"
   echo ""
+  log_info "Repo URL: ${REPO_URL}"
+  log_info "Repo ref: ${REPO_REF}"
+  log_info "Install dir: ${INSTALL_DIR}"
+  log_info "Service user: ${SERVICE_USER}"
+  log_info "Service group: ${SERVICE_GROUP:-<auto>}"
+  log_info "HTTPS port: ${PORT}"
+  echo ""
 
-  require_root
   check_os
+  check_systemd
   install_system_dependencies
   ensure_node_24
   ensure_service_user

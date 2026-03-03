@@ -19,7 +19,13 @@ import {
   ParseError,
   RecordFilters,
   RecordsPage,
-  SMDRRecord
+  SMDRRecord,
+  CallCompletionCode,
+  TransferConferenceCode,
+  LongCallIndicator,
+  SpeedCallForwardCode,
+  RouteOptCode,
+  SMDRFormatVariant
 } from '../../shared/types';
 import { CryptoUtil } from '../security/CryptoUtil';
 import { billingEngine } from '../billing/BillingEngine';
@@ -42,6 +48,28 @@ interface DbRecordRow {
   network_oli?: string;
   call_type?: 'internal' | 'external';
   raw_line?: string;
+  // New Mitel spec fields
+  long_call_indicator?: string;
+  attendant_flag?: string;
+  time_to_answer?: number | null;
+  meter_pulses?: number | null;
+  speed_call_forward_flag?: string;
+  route_opt_flag?: string;
+  system_id?: string;
+  mlpp_level?: string;
+  ani?: string;
+  dnis?: string;
+  call_sequence?: string;
+  suite_id?: string;
+  two_b_channel_tag?: string;
+  calling_ehdu?: string;
+  called_ehdu?: string;
+  calling_location?: string;
+  called_location?: string;
+  record_format?: string;
+  record_length?: number;
+  is_multi_line?: number;  // SQLite stores boolean as 0/1
+  parsed_at?: string;
 }
 
 export class DatabaseService {
@@ -130,6 +158,8 @@ export class DatabaseService {
     this.runBillingMigration();
     this.runCallLogQueryMigration();
     this.runAnalyticsAggregationMigration();
+    this.runMitelSpecMigration();
+    this.runRecordIdempotencyMigration();
   }
 
 
@@ -221,6 +251,112 @@ export class DatabaseService {
     }
   }
 
+  /**
+   * Migration for Mitel SMDR Spec Compliance - adds all missing fields
+   */
+  private runMitelSpecMigration(): void {
+    const existing = (this.db.prepare('PRAGMA table_info(smdr_records)').all() as any[]).map((c) => c.name as string);
+    
+    const mitelCols: Array<{ name: string; type: string; def: string }> = [
+      // Core fields
+      { name: 'long_call_indicator', type: 'TEXT', def: 'NULL' },
+      { name: 'attendant_flag', type: 'TEXT', def: 'NULL' },
+      { name: 'time_to_answer', type: 'INTEGER', def: 'NULL' },
+      { name: 'meter_pulses', type: 'INTEGER', def: 'NULL' },
+      { name: 'speed_call_forward_flag', type: 'TEXT', def: 'NULL' },
+      { name: 'route_opt_flag', type: 'TEXT', def: 'NULL' },
+      { name: 'system_id', type: 'TEXT', def: 'NULL' },
+      { name: 'mlpp_level', type: 'TEXT', def: 'NULL' },
+      // ANI/DNIS fields
+      { name: 'ani', type: 'TEXT', def: 'NULL' },
+      { name: 'dnis', type: 'TEXT', def: 'NULL' },
+      // Network OLI fields
+      { name: 'call_sequence', type: 'TEXT', def: 'NULL' },
+      // Extended Reporting fields
+      { name: 'suite_id', type: 'TEXT', def: 'NULL' },
+      { name: 'two_b_channel_tag', type: 'TEXT', def: 'NULL' },
+      { name: 'calling_ehdu', type: 'TEXT', def: 'NULL' },
+      { name: 'called_ehdu', type: 'TEXT', def: 'NULL' },
+      { name: 'calling_location', type: 'TEXT', def: 'NULL' },
+      { name: 'called_location', type: 'TEXT', def: 'NULL' },
+      // Metadata fields
+      { name: 'record_format', type: 'TEXT', def: 'NULL' },
+      { name: 'record_length', type: 'INTEGER', def: 'NULL' },
+      { name: 'is_multi_line', type: 'INTEGER', def: '0' },
+      { name: 'parsed_at', type: 'TEXT', def: 'NULL' },
+    ];
+
+    for (const col of mitelCols) {
+      if (!existing.includes(col.name)) {
+        this.db.exec(`ALTER TABLE smdr_records ADD COLUMN ${col.name} ${col.type} DEFAULT ${col.def}`);
+        console.log(`[DB] Mitel spec migration: added column ${col.name}`);
+      }
+    }
+
+    // Add indexes for new fields
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_smdr_long_call ON smdr_records(long_call_indicator);
+      CREATE INDEX IF NOT EXISTS idx_smdr_completion_full ON smdr_records(call_completion_status, call_type, date);
+      CREATE INDEX IF NOT EXISTS idx_smdr_ani ON smdr_records(ani);
+      CREATE INDEX IF NOT EXISTS idx_smdr_dnis ON smdr_records(dnis);
+      CREATE INDEX IF NOT EXISTS idx_smdr_call_sequence ON smdr_records(call_sequence);
+      CREATE INDEX IF NOT EXISTS idx_smdr_system_id ON smdr_records(system_id);
+      CREATE INDEX IF NOT EXISTS idx_smdr_record_format ON smdr_records(record_format);
+      CREATE INDEX IF NOT EXISTS idx_smdr_attendant ON smdr_records(attendant_flag);
+      CREATE INDEX IF NOT EXISTS idx_smdr_transfer_conf ON smdr_records(transfer_flag, third_party);
+    `);
+  }
+
+  /**
+   * Prevent duplicate record ingestion when upstream sends replayed lines
+   * or multiple service instances write concurrently.
+   */
+  private runRecordIdempotencyMigration(): void {
+    // Remove existing duplicates first to allow unique index creation.
+    const deleted = this.db.prepare(`
+      WITH ranked AS (
+        SELECT
+          id,
+          ROW_NUMBER() OVER (PARTITION BY date, raw_line ORDER BY id ASC) AS rn
+        FROM smdr_records
+        WHERE raw_line IS NOT NULL AND TRIM(raw_line) <> ''
+      )
+      DELETE FROM smdr_records
+      WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
+    `).run().changes;
+
+    this.db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_smdr_unique_date_raw_line
+      ON smdr_records(date, raw_line)
+      WHERE raw_line IS NOT NULL AND TRIM(raw_line) <> ''
+    `);
+
+    if (deleted > 0) {
+      this.db.exec('DELETE FROM analytics_hourly_stats');
+      this.db.exec(`
+        INSERT INTO analytics_hourly_stats (
+          date,
+          hour,
+          calls,
+          total_duration_seconds,
+          answered_calls,
+          transfer_conference_calls
+        )
+        SELECT
+          date,
+          start_hour,
+          COUNT(*) AS calls,
+          COALESCE(SUM(duration_seconds), 0) AS total_duration_seconds,
+          SUM(CASE WHEN call_completion_status = 'A' THEN 1 ELSE 0 END) AS answered_calls,
+          SUM(CASE WHEN COALESCE(transfer_flag, '') IN ('T', 'X', 'C') THEN 1 ELSE 0 END) AS transfer_conference_calls
+        FROM smdr_records
+        GROUP BY date, start_hour
+      `);
+      this.analyticsSnapshotCache.clear();
+      console.log(`[DB] Deduplicated ${deleted} historical SMDR record(s) by (date, raw_line)`);
+    }
+  }
+
   getRawDb(): Database.Database {
     return this.db;
   }
@@ -229,7 +365,7 @@ export class DatabaseService {
     this.db.close();
   }
 
-  insertRecord(record: SMDRRecord): void {
+  insertRecord(record: SMDRRecord): boolean {
     // Rate the call — use digitsDialed (outgoing) or calledParty as fallback
     const dialledNumber = record.digitsDialed?.trim() || record.calledParty?.trim() || '';
     const durationSecs = durationToSeconds(record.duration);
@@ -240,7 +376,7 @@ export class DatabaseService {
     const startHour = Number.isFinite(hourRaw) ? Math.min(23, Math.max(0, hourRaw)) : 0;
 
     const insert = this.db.prepare(`
-      INSERT INTO smdr_records (
+      INSERT OR IGNORE INTO smdr_records (
         date,
         start_time,
         start_hour,
@@ -269,7 +405,29 @@ export class DatabaseService {
         billable_units,
         call_cost,
         bill_currency,
-        tax_amount
+        tax_amount,
+        -- Mitel spec fields
+        long_call_indicator,
+        attendant_flag,
+        time_to_answer,
+        meter_pulses,
+        speed_call_forward_flag,
+        route_opt_flag,
+        system_id,
+        mlpp_level,
+        ani,
+        dnis,
+        call_sequence,
+        suite_id,
+        two_b_channel_tag,
+        calling_ehdu,
+        called_ehdu,
+        calling_location,
+        called_location,
+        record_format,
+        record_length,
+        is_multi_line,
+        parsed_at
       ) VALUES (
         @date,
         @start_time,
@@ -299,11 +457,33 @@ export class DatabaseService {
         @billable_units,
         @call_cost,
         @bill_currency,
-        @tax_amount
+        @tax_amount,
+        -- Mitel spec fields
+        @long_call_indicator,
+        @attendant_flag,
+        @time_to_answer,
+        @meter_pulses,
+        @speed_call_forward_flag,
+        @route_opt_flag,
+        @system_id,
+        @mlpp_level,
+        @ani,
+        @dnis,
+        @call_sequence,
+        @suite_id,
+        @two_b_channel_tag,
+        @calling_ehdu,
+        @called_ehdu,
+        @calling_location,
+        @called_location,
+        @record_format,
+        @record_length,
+        @is_multi_line,
+        @parsed_at
       );
     `);
 
-    insert.run({
+    const result = insert.run({
       date: record.date,
       start_time: record.startTime,
       start_hour: startHour,
@@ -315,8 +495,8 @@ export class DatabaseService {
       trunk_number: record.trunkNumber,
       digits_dialed: this.crypto.encrypt(record.digitsDialed),
       account_code: this.crypto.encrypt(record.accountCode),
-      call_completion_status: record.callCompletionStatus,
-      transfer_flag: record.transferFlag,
+      call_completion_status: record.callCompletionStatus as string | undefined,
+      transfer_flag: record.transferConference as string | undefined,
       call_identifier: record.callIdentifier,
       call_sequence_identifier: record.callSequenceIdentifier,
       associated_call_identifier: record.associatedCallIdentifier,
@@ -333,10 +513,36 @@ export class DatabaseService {
       call_cost: billing.cost,
       bill_currency: billing.currency,
       tax_amount: billing.taxAmount ?? 0,
+      // Mitel spec fields
+      long_call_indicator: record.longCallIndicator ?? null,
+      attendant_flag: record.attendantFlag ?? null,
+      time_to_answer: record.timeToAnswer ?? null,
+      meter_pulses: record.meterPulses ?? null,
+      speed_call_forward_flag: record.speedCallForwardFlag ?? null,
+      route_opt_flag: record.routeOptFlag ?? null,
+      system_id: record.systemId ?? null,
+      mlpp_level: record.mlppLevel ?? null,
+      ani: record.ani ?? null,
+      dnis: record.dnis ?? null,
+      call_sequence: record.callSequence ?? null,
+      suite_id: record.suiteId ?? null,
+      two_b_channel_tag: record.twoBChannelTag ?? null,
+      calling_ehdu: record.callingEHDU ?? null,
+      called_ehdu: record.calledEHDU ?? null,
+      calling_location: record.callingLocation ?? null,
+      called_location: record.calledLocation ?? null,
+      record_format: record.recordFormat ?? null,
+      record_length: record.recordLength ?? null,
+      is_multi_line: record.isMultiLine ? 1 : 0,
+      parsed_at: record.parsedAt ?? null,
     });
 
+    if (result.changes === 0) {
+      return false;
+    }
+
     const answered = record.callCompletionStatus === 'A' ? 1 : 0;
-    const transferConference = ['T', 'X', 'C'].includes(record.transferFlag ?? '') ? 1 : 0;
+    const transferConference = ['T', 'X', 'C'].includes((record.transferConference ?? record.transferFlag ?? '')) ? 1 : 0;
     this.db.prepare(
       `INSERT INTO analytics_hourly_stats (
          date,
@@ -354,6 +560,7 @@ export class DatabaseService {
     ).run(record.date, startHour, durationSecs, answered, transferConference);
 
     this.analyticsSnapshotCache.clear();
+    return true;
   }
 
   insertParseError(error: ParseError): void {
@@ -541,6 +748,21 @@ export class DatabaseService {
       params.push(filters.networkOLI);
     }
 
+    if (filters.longCallIndicator) {
+      where.push("COALESCE(long_call_indicator, ' ') = ?");
+      params.push(filters.longCallIndicator);
+    }
+
+    if (filters.ani) {
+      where.push('ani LIKE ?');
+      params.push(`%${filters.ani}%`);
+    }
+
+    if (filters.dnis) {
+      where.push('dnis LIKE ?');
+      params.push(`%${filters.dnis}%`);
+    }
+
     return {
       where,
       params,
@@ -572,7 +794,29 @@ export class DatabaseService {
           associated_call_identifier,
           network_oli,
           call_type,
-          raw_line
+          raw_line,
+          -- Mitel spec fields
+          long_call_indicator,
+          attendant_flag,
+          time_to_answer,
+          meter_pulses,
+          speed_call_forward_flag,
+          route_opt_flag,
+          system_id,
+          mlpp_level,
+          ani,
+          dnis,
+          call_sequence,
+          suite_id,
+          two_b_channel_tag,
+          calling_ehdu,
+          called_ehdu,
+          calling_location,
+          called_location,
+          record_format,
+          record_length,
+          is_multi_line,
+          parsed_at
         FROM smdr_records
         ${clause}
         ORDER BY id DESC
@@ -610,7 +854,29 @@ export class DatabaseService {
           associated_call_identifier,
           network_oli,
           call_type,
-          raw_line
+          raw_line,
+          -- Mitel spec fields
+          long_call_indicator,
+          attendant_flag,
+          time_to_answer,
+          meter_pulses,
+          speed_call_forward_flag,
+          route_opt_flag,
+          system_id,
+          mlpp_level,
+          ani,
+          dnis,
+          call_sequence,
+          suite_id,
+          two_b_channel_tag,
+          calling_ehdu,
+          called_ehdu,
+          calling_location,
+          called_location,
+          record_format,
+          record_length,
+          is_multi_line,
+          parsed_at
         FROM smdr_records
         ${clause}
         ORDER BY id DESC
@@ -1102,13 +1368,14 @@ export class DatabaseService {
     }>;
 
     const topCostCalls: BillingReportTopCostCall[] = rawTopCostCalls.map((row) => {
-      const callingParty = this.maskParty(this.crypto.decrypt(row.calling_party) ?? row.calling_party) ?? '';
-      const calledParty = this.maskParty(this.crypto.decrypt(row.called_party) ?? row.called_party) ?? '';
-      const digitsDialed = this.maskParty(this.crypto.decrypt(row.digits_dialed ?? undefined) ?? row.digits_dialed ?? undefined);
+      // Show full extension numbers in billing report (no masking)
+      const callingParty = this.crypto.decrypt(row.calling_party) ?? row.calling_party;
+      const calledParty = this.crypto.decrypt(row.called_party) ?? row.called_party;
+      const digitsDialed = this.crypto.decrypt(row.digits_dialed ?? undefined) ?? row.digits_dialed ?? undefined;
       return {
         ...row,
-        calling_party: callingParty,
-        called_party: calledParty,
+        calling_party: callingParty ?? '',
+        called_party: calledParty ?? '',
         digits_dialed: digitsDialed ?? null
       };
     });
@@ -1448,6 +1715,7 @@ export class DatabaseService {
 
   private mapRecord(row: DbRecordRow): SMDRRecord {
     return {
+      // Core fields
       date: row.date,
       startTime: row.start_time,
       duration: row.duration,
@@ -1457,14 +1725,37 @@ export class DatabaseService {
       trunkNumber: row.trunk_number,
       digitsDialed: this.crypto.decrypt(row.digits_dialed),
       accountCode: this.crypto.decrypt(row.account_code),
-      callCompletionStatus: row.call_completion_status,
+      callCompletionStatus: row.call_completion_status as CallCompletionCode | undefined,
+      transferConference: row.transfer_flag as TransferConferenceCode | undefined,
       transferFlag: row.transfer_flag,
       callIdentifier: row.call_identifier,
       callSequenceIdentifier: row.call_sequence_identifier,
       associatedCallIdentifier: row.associated_call_identifier,
       networkOLI: row.network_oli,
       callType: row.call_type,
-      rawLine: row.raw_line
+      rawLine: row.raw_line,
+      // Mitel spec fields
+      longCallIndicator: row.long_call_indicator as LongCallIndicator | undefined,
+      attendantFlag: row.attendant_flag as '*' | '' | undefined,
+      timeToAnswer: row.time_to_answer ?? null,
+      meterPulses: row.meter_pulses ?? null,
+      speedCallForwardFlag: row.speed_call_forward_flag as SpeedCallForwardCode | undefined,
+      routeOptFlag: row.route_opt_flag as RouteOptCode | undefined,
+      systemId: row.system_id,
+      mlppLevel: row.mlpp_level,
+      ani: row.ani,
+      dnis: row.dnis,
+      callSequence: row.call_sequence,
+      suiteId: row.suite_id,
+      twoBChannelTag: row.two_b_channel_tag,
+      callingEHDU: row.calling_ehdu,
+      calledEHDU: row.called_ehdu,
+      callingLocation: row.calling_location,
+      calledLocation: row.called_location,
+      recordFormat: row.record_format as SMDRFormatVariant | undefined,
+      recordLength: row.record_length,
+      isMultiLine: row.is_multi_line === 1,
+      parsedAt: row.parsed_at,
     };
   }
 

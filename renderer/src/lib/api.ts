@@ -18,6 +18,7 @@ import {
     RecordFilters,
     RecordsPage,
     SMDRRecord,
+    SMDRImportResult,
     AuditEntry,
     AuditAction,
     User
@@ -155,6 +156,14 @@ export interface UsersQuery {
     role?: 'admin' | 'user' | 'all';
     sortBy?: UsersSortBy;
     sortDir?: UsersSortDir;
+    // Advanced filters
+    status?: 'all' | 'active' | 'inactive' | 'locked';
+    createdAfter?: string;
+    createdBefore?: string;
+    lastLoginAfter?: string;
+    lastLoginBefore?: string;
+    neverLoggedIn?: boolean;
+    inactiveDays?: number;
 }
 
 export interface UsersListResponse {
@@ -207,17 +216,23 @@ function aggregateTop(rows: SMDRRecord[], getKey: (row: SMDRRecord) => string): 
 export const api = {
     isElectron: () => isElectron,
 
-    login: async (credentials: AuthCredentials): Promise<boolean> => {
-        if (isElectron) return window.smdrInsight.login(credentials);
+    login: async (credentials: AuthCredentials): Promise<{ success: boolean; error?: string }> => {
+        if (isElectron) {
+            const result = await window.smdrInsight.login(credentials);
+            return { success: result, error: result ? undefined : 'Invalid credentials' };
+        }
         try {
             const res = await rest<{ success: boolean; token?: string; error?: string }>('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(credentials)
             });
-            return Boolean(res.success);
+            return { success: Boolean(res.success), error: res.success ? undefined : res.error };
         } catch (error) {
-            throw error;
+            // Return error message instead of throwing
+            const errorMessage = error instanceof Error ? error.message : 'Login failed';
+            console.warn('Login failed:', errorMessage);
+            return { success: false, error: errorMessage };
         }
     },
 
@@ -371,6 +386,40 @@ export const api = {
         return res.removed;
     },
 
+    importSmdrText: async (payload: { fileName?: string; content: string }): Promise<SMDRImportResult> => {
+        if (isElectron) {
+            if (typeof window.smdrInsight.importSmdrText === 'function') {
+                return window.smdrInsight.importSmdrText(payload);
+            }
+            throw new Error('SMDR text import is not available in desktop mode yet');
+        }
+        const response = await fetch(`${API_BASE}/api/records/import-text`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        });
+        if (response.status === 401) {
+            localStorage.removeItem('smdr_token');
+        }
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('Import endpoint is missing on the running backend. Restart the server so it loads the latest build.');
+            }
+            const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+            throw new Error((error as { error?: string }).error || `HTTP ${response.status}`);
+        }
+        const res = (await response.json()) as { success: boolean; data: SMDRImportResult; error?: string };
+        if (!res.success || !res.data) {
+            throw new Error(res.error || 'Import request failed');
+        }
+        return res.data;
+    },
+
     estimatePurgeRecords: async (days: number): Promise<{ count: number; cutoffDate: string }> => {
         const res = await rest<{ success: boolean; data: { count: number; cutoffDate: string } }>(`/api/records/purge-estimate?days=${days}`);
         return res.data;
@@ -511,6 +560,32 @@ export const api = {
         return res.data;
     },
 
+    // ── Bulk Operations ─────────────────────────────────────────────────────
+    bulkRuleAction: async (action: 'enable' | 'disable' | 'delete', ruleIds: string[]) => {
+        const res = await rest<{ success: boolean; data: any }>('/api/billing/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, ruleIds }),
+        });
+        return res.data;
+    },
+
+    // ── Audit History ───────────────────────────────────────────────────────
+    getBillingAuditHistory: async (limit = 100, offset = 0) => {
+        const res = await rest<{ success: boolean; data: any }>(`/api/billing/audit?limit=${limit}&offset=${offset}`);
+        return res.data;
+    },
+
+    // ── Impact Analysis ─────────────────────────────────────────────────────
+    analyzeBillingImpact: async (category: string, currentRate: number, proposedRate: number, periodDays = 30) => {
+        const res = await rest<{ success: boolean; data: any }>('/api/billing/impact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category, currentRate, proposedRate, periodDays }),
+        });
+        return res.data;
+    },
+
     getBillingReport: async (
         query: BillingReportQuery = {},
         options?: { timeoutMs?: number; signal?: AbortSignal }
@@ -570,9 +645,21 @@ export const api = {
         if (query.role && query.role !== 'all') params.append('role', query.role);
         if (query.sortBy) params.append('sortBy', query.sortBy);
         if (query.sortDir) params.append('sortDir', query.sortDir);
+        // Advanced filters
+        if (query.status && query.status !== 'all') params.append('status', query.status);
+        if (query.createdAfter) params.append('createdAfter', query.createdAfter);
+        if (query.createdBefore) params.append('createdBefore', query.createdBefore);
+        if (query.lastLoginAfter) params.append('lastLoginAfter', query.lastLoginAfter);
+        if (query.lastLoginBefore) params.append('lastLoginBefore', query.lastLoginBefore);
+        if (query.neverLoggedIn) params.append('neverLoggedIn', 'true');
+        if (query.inactiveDays) params.append('inactiveDays', String(query.inactiveDays));
 
         const queryString = params.toString();
         const res = await rest<{ success: boolean; data: UsersListResponse | User[] }>(`/api/users${queryString ? `?${queryString}` : ''}`);
+        console.log('[API] getUsers response:', res);
+        if (!res.success) {
+            throw new Error(res.data as any || 'Failed to fetch users');
+        }
         if (Array.isArray(res.data)) {
             const page = query.page ?? 1;
             const pageSize = query.pageSize ?? (res.data.length || 20);
@@ -583,12 +670,14 @@ export const api = {
                 pageSize
             };
         }
-        return {
-            items: Array.isArray(res.data.items) ? res.data.items : [],
-            total: Number.isFinite(res.data.total) ? res.data.total : 0,
-            page: Number.isFinite(res.data.page) ? res.data.page : (query.page ?? 1),
-            pageSize: Number.isFinite(res.data.pageSize) ? res.data.pageSize : (query.pageSize ?? 20)
+        const result = {
+            items: Array.isArray((res.data as UsersListResponse).items) ? (res.data as UsersListResponse).items : [],
+            total: Number.isFinite((res.data as UsersListResponse).total) ? (res.data as UsersListResponse).total : 0,
+            page: Number.isFinite((res.data as UsersListResponse).page) ? (res.data as UsersListResponse).page : (query.page ?? 1),
+            pageSize: Number.isFinite((res.data as UsersListResponse).pageSize) ? (res.data as UsersListResponse).pageSize : (query.pageSize ?? 20)
         };
+        console.log('[API] getUsers returning:', result);
+        return result;
     },
 
     createUser: async (username: string, password: string, role: string = 'user') => {
@@ -616,20 +705,48 @@ export const api = {
         return res;
     },
 
+    getUserDetails: async (username: string) => {
+        const res = await rest<{ success: boolean; data: {
+            id: number;
+            username: string;
+            role: string;
+            created_at: string;
+            last_login?: string;
+            account_status: 'active' | 'locked' | 'disabled';
+            failed_login_attempts: number;
+            login_count: number;
+        } }>(`/api/users/${username}/details`);
+        return res.data;
+    },
+
+    getUserAuditHistory: async (username: string, limit: number = 20) => {
+        const res = await rest<{ success: boolean; data: AuditEntry[] }>(`/api/users/${username}/audit?limit=${limit}`);
+        return res.data;
+    },
+
     getAuditLogs: async (options?: {
         action?: AuditAction;
         user?: string;
         startDate?: string;
         endDate?: string;
-        limit?: number
+        ipAddress?: string;
+        limit?: number;
+        offset?: number;
     }) => {
         const q = new URLSearchParams();
         if (options?.action) q.append('action', options.action);
         if (options?.user) q.append('user', options.user);
         if (options?.startDate) q.append('startDate', options.startDate);
         if (options?.endDate) q.append('endDate', options.endDate);
+        if (options?.ipAddress) q.append('ipAddress', options.ipAddress);
         if (options?.limit) q.append('limit', String(options.limit));
-        return rest<AuditEntry[]>(`/api/audit-logs?${q.toString()}`);
+        if (options?.offset) q.append('offset', String(options.offset));
+        const res = await rest<{ success: boolean; data: AuditEntry[]; total: number }>('/api/audit-logs?' + q.toString());
+        console.log('[API] getAuditLogs response:', res);
+        if (!res.success) {
+            throw new Error((res.data as any)?.error || 'Failed to fetch audit logs');
+        }
+        return { data: res.data, total: res.total };
     },
 
     getConnectionEvents: async (options?: ConnectionEventsQuery): Promise<ConnectionEventsPage> => {
@@ -643,5 +760,24 @@ export const api = {
         const query = q.toString();
         const res = await rest<{ success: boolean; data: ConnectionEventsPage }>(`/api/connection-events${query ? `?${query}` : ''}`);
         return res.data;
+    },
+
+    // Bulk Operations
+    bulkDeleteUsers: async (usernames: string[]) => {
+        const res = await rest<{ success: boolean; deleted: number; errors: string[] }>('/api/users/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usernames })
+        });
+        return res;
+    },
+
+    bulkUpdateRole: async (usernames: string[], role: 'admin' | 'user') => {
+        const res = await rest<{ success: boolean; updated: number; errors: string[] }>('/api/users/bulk-update-role', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usernames, role })
+        });
+        return res;
     },
 };

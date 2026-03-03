@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { AppConfig } from '../shared/types';
+import { AppConfig, DEFAULT_SMDR_PARSER_CONFIG } from '../shared/types';
 
 export function buildDefaultConfig(userDataPath: string): AppConfig {
   return {
@@ -26,6 +26,7 @@ export function buildDefaultConfig(userDataPath: string): AppConfig {
       detectTagCalls: true,
       detectTollDenied: true
     },
+    smdrParser: DEFAULT_SMDR_PARSER_CONFIG,
     maxInMemoryRecords: 2000
   };
 }

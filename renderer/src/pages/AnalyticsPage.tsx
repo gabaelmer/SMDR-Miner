@@ -6,20 +6,27 @@ import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContaine
 import { AnalyticsSnapshot, RecordFilters } from '../../../shared/types';
 import { Heatmap } from '../components/Heatmap';
 import { api } from '../lib/api';
-import { RangePreset, deltaBadge, formatSeconds, getPresetRange, normalizeTransferLabel, safePercent, toCsv } from '../lib/analyticsUtils';
+import { RangePreset, deltaBadge, formatSeconds, getPresetRange, normalizeTransferLabel, toCsv } from '../lib/analyticsUtils';
 import { EMPTY_SUMMARY, normalizeAnalyticsSnapshot } from '../lib/analyticsSnapshot';
 import { useAppStore } from '../state/appStore';
 
 const TRANSFER_COLORS: Record<string, string> = {
   None: '#2484eb',
-  'T - Transfer': '#26b67f',
-  'X - Conference': '#9b59b6',
-  'C - Conference': '#e67e22',
+  'Supervised Transfer': '#26b67f',
+  'Blind Transfer': '#9b59b6',
+  Conference: '#e67e22',
   none: '#2484eb',
   T: '#26b67f',
   X: '#9b59b6',
   C: '#e67e22'
 };
+
+const TRANSFER_FLAG_ORDER = [
+  { flag: 'none', label: 'None' },
+  { flag: 'T', label: 'Supervised Transfer' },
+  { flag: 'X', label: 'Blind Transfer' },
+  { flag: 'C', label: 'Conference' }
+] as const;
 
 const CORRELATION_COLORS: Record<string, string> = {
   critical: 'var(--red)',
@@ -57,17 +64,71 @@ export function AnalyticsPage() {
   const [compareLabel, setCompareLabel] = useState('');
   const [loadingCurrent, setLoadingCurrent] = useState(false);
   const [loadingCompare, setLoadingCompare] = useState(false);
+  const [selectedTransferSlice, setSelectedTransferSlice] = useState<{ label: string; count: number } | null>(null);
+  const transferDonutRef = useRef<HTMLDivElement>(null);
+  const [transferDonutSize, setTransferDonutSize] = useState({ width: 0, height: 0 });
+
+  const transferCountByFlag = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of analytics.transferConference) {
+      const rawFlag = String(item.flag ?? '').trim();
+      if (!rawFlag) continue;
+      const normalizedFlag =
+        rawFlag.toLowerCase() === 'none' ? 'none' : rawFlag.toUpperCase();
+      counts.set(normalizedFlag, (counts.get(normalizedFlag) ?? 0) + (item.count ?? 0));
+    }
+    return counts;
+  }, [analytics.transferConference]);
+
+  const transferSummaryData = useMemo(
+    () =>
+      TRANSFER_FLAG_ORDER.map((item) => ({
+        flag: item.flag,
+        label: item.label,
+        count: transferCountByFlag.get(item.flag) ?? 0,
+        color: TRANSFER_COLORS[item.label] || TRANSFER_COLORS[item.flag] || '#2484eb'
+      })),
+    [transferCountByFlag]
+  );
 
   const transferChartData = useMemo(
     () =>
-      analytics.transferConference
+      transferSummaryData
         .filter((item) => item.count > 0)
         .map((item) => ({
           ...item,
           label: normalizeTransferLabel(item.flag)
         })),
-    [analytics.transferConference]
+    [transferSummaryData]
   );
+  const centerTransferLines = useMemo(
+    () =>
+      transferSummaryData.map((item) => ({
+        key: item.flag,
+        text: `${item.label}: ${item.count}`,
+        color: item.color,
+        active: selectedTransferSlice?.label === item.label
+      })),
+    [transferSummaryData, selectedTransferSlice]
+  );
+  const centerTransferLayout = useMemo(() => {
+    const minDim = Math.max(0, Math.min(transferDonutSize.width, transferDonutSize.height));
+    const innerDiameter = minDim > 0 ? minDim * 0.55 : 220;
+    const overlayWidth = Math.max(132, innerDiameter * 0.88);
+    const gap = Math.max(4, Math.min(6, innerDiameter * 0.025));
+    const padY = Math.max(2, Math.min(4, innerDiameter * 0.015));
+    const padX = Math.max(7, Math.min(10, innerDiameter * 0.045));
+    const dotSize = Math.max(6, Math.min(8, innerDiameter * 0.03));
+    const fontSize = Math.max(9, Math.min(11, innerDiameter * 0.045));
+    const lineHeight = fontSize + padY * 2 + 2;
+    const estimatedHeight = centerTransferLines.length > 0
+      ? centerTransferLines.length * lineHeight + (centerTransferLines.length - 1) * gap
+      : lineHeight;
+    const availableHeight = innerDiameter * 0.9;
+    const scale = availableHeight > 0 ? Math.min(1, availableHeight / estimatedHeight) : 1;
+
+    return { overlayWidth, gap, padY, padX, dotSize, fontSize, scale };
+  }, [centerTransferLines.length, transferDonutSize.height, transferDonutSize.width]);
 
   const compareSummary = compareAnalytics?.summary;
   const summary = analytics.summary ?? EMPTY_SUMMARY;
@@ -118,6 +179,21 @@ export function AnalyticsPage() {
       })
       .finally(() => setLoadingCompare(false));
   }, [compareEnabled, startDate, endDate]);
+
+  useEffect(() => {
+    const node = transferDonutRef.current;
+    if (!node) return;
+
+    const updateSize = () => {
+      const rect = node.getBoundingClientRect();
+      setTransferDonutSize({ width: rect.width, height: rect.height });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const openCallLog = (partial: Partial<RecordFilters>) => {
     setFilters({
@@ -343,7 +419,11 @@ export function AnalyticsPage() {
           <p className="mb-3 text-sm font-semibold" style={{ color: 'var(--text)' }}>
             Transfer/Conference Distribution (click a slice to drill down)
           </p>
-          <div className="flex-1 min-h-[170px]">
+          <div
+            ref={transferDonutRef}
+            className="relative flex-1 min-h-[170px]"
+            onClick={() => setSelectedTransferSlice(null)}
+          >
             {transferChartData.length === 0 ? (
               <p style={{ fontSize: '11px', color: 'var(--muted2)', textAlign: 'center', paddingTop: '84px' }}>
                 No transfer or conference calls in selected range
@@ -351,67 +431,95 @@ export function AnalyticsPage() {
             ) : (
               <ResponsiveContainer>
                 <PieChart>
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        const data = payload[0].payload;
-                        const sliceColor = payload[0].color || TRANSFER_COLORS[data.label] || '#2484eb';
-
-                        const total = transferChartData.reduce((sum, item) => sum + item.count, 0);
-                        const pct = safePercent(data.count, total);
-
-                        return (
-                          <div
-                            style={{
-                              background: '#001228',
-                              border: `1px solid ${sliceColor}`,
-                              borderRadius: '12px',
-                              boxShadow: `0 0 16px ${sliceColor}88`,
-                              padding: '8px 12px',
-                              color: sliceColor,
-                              fontWeight: 700,
-                              fontSize: '13px'
-                            }}
-                          >
-                            <p style={{ margin: 0, fontWeight: 800 }}>{data.label || 'Transfer/Conference'}</p>
-                            <p style={{ margin: '4px 0 0 0', color: '#fff' }}>
-                              {data.count} calls ({pct}%)
-                            </p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
                   <Pie
                     data={transferChartData}
                     dataKey="count"
                     nameKey="label"
                     cx="50%"
                     cy="50%"
-                    innerRadius="44%"
-                    outerRadius="74%"
-                    paddingAngle={2}
-                    label={(entry: { name?: unknown; value?: unknown } | undefined) => {
-                      const name = typeof entry?.name === 'string' ? entry.name : '';
-                      const value = Number(entry?.value ?? 0) || 0;
-                      return name ? `${name}: ${value}` : '';
-                    }}
+                    innerRadius="55%"
+                    outerRadius="80%"
+                    paddingAngle={4}
                     labelLine={false}
+                    label={false}
                     onClick={(entry: unknown) => {
                       if (!entry || typeof entry !== 'object') return;
-                      const flag =
-                        (entry as { flag?: unknown; payload?: { flag?: unknown } }).flag ??
-                        (entry as { payload?: { flag?: unknown } }).payload?.flag;
-                      if (typeof flag === 'string' && flag) openCallLog({ transferFlag: flag });
+                      const payload = (entry as { payload?: { flag?: unknown; count?: number; label?: string } }).payload ?? (entry as { flag?: unknown; count?: number; label?: string });
+                      const flag = payload.flag;
+                      if (typeof flag === 'string' && flag) {
+                        setSelectedTransferSlice({
+                          label: typeof payload.label === 'string' && payload.label ? payload.label : normalizeTransferLabel(flag),
+                          count: typeof payload.count === 'number' ? payload.count : 0
+                        });
+                        openCallLog({ transferFlag: flag });
+                      }
                     }}
                   >
                     {transferChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={TRANSFER_COLORS[entry.label] || TRANSFER_COLORS[entry.flag] || '#2484eb'} />
+                      <Cell key={`cell-${index}`} fill={entry.color || TRANSFER_COLORS[entry.label] || TRANSFER_COLORS[entry.flag] || '#2484eb'} />
                     ))}
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
+            )}
+            {transferChartData.length > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  transform: `translate(-50%, -50%) scale(${centerTransferLayout.scale})`,
+                  transformOrigin: 'center center',
+                  width: `${centerTransferLayout.overlayWidth}px`,
+                  maxWidth: '88%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: `${centerTransferLayout.gap}px`,
+                  pointerEvents: 'none'
+                }}
+              >
+                {centerTransferLines.map((line) => (
+                  <div
+                    key={`center-transfer-pill-${line.key}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      borderRadius: '8px',
+                      border: `1px solid ${line.active ? `${line.color}99` : 'var(--border)'}`,
+                      background: line.active ? `${line.color}22` : 'rgba(19, 41, 87, 0.72)',
+                      boxShadow: line.active ? `0 0 10px ${line.color}33` : 'inset 0 0 0 1px rgba(255,255,255,0.03)',
+                      padding: `${centerTransferLayout.padY}px ${centerTransferLayout.padX}px`
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      style={{
+                        width: `${centerTransferLayout.dotSize}px`,
+                        height: `${centerTransferLayout.dotSize}px`,
+                        borderRadius: '999px',
+                        display: 'inline-block',
+                        background: line.color,
+                        boxShadow: `0 0 8px ${line.color}66`
+                      }}
+                    />
+                    <span
+                      className="mono"
+                      style={{
+                        color: '#f5f8ff',
+                        fontSize: `${centerTransferLayout.fontSize}px`,
+                        fontWeight: line.active ? 800 : 700,
+                        letterSpacing: '0.01em',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}
+                    >
+                      {line.text}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>

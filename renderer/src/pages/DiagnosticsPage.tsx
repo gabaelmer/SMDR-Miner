@@ -674,7 +674,7 @@ export function DiagnosticsPage() {
             style={{ background: 'rgba(36, 132, 235, 0.1)', borderColor: 'var(--border)' }}
           >
             <p className="text-sm" style={{ color: 'var(--muted)' }}>Incoming</p>
-            <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--brand)' }}>{dashboard.incomingCalls}</p>
+            <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--brand)' }}>{dashboard.inboundCalls}</p>
             <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
               Last refresh: {formatTimestamp(lastDashboardRefreshAt ?? undefined)}
             </p>
@@ -693,10 +693,10 @@ export function DiagnosticsPage() {
             className="p-3 rounded-xl border min-h-[116px]"
             style={{ background: 'rgba(139, 92, 246, 0.1)', borderColor: 'var(--border)' }}
           >
-            <p className="text-sm" style={{ color: 'var(--muted)' }}>Parse Errors</p>
-            <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--purple)' }}>{parseErrors.length}</p>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>Internal Calls</p>
+            <p className="mt-1 text-2xl font-bold" style={{ color: 'var(--purple)' }}>{dashboard.internalCalls}</p>
             <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-              Last refresh: {formatTimestamp(lastParseErrorsRefreshAt ?? undefined)}
+              Last refresh: {formatTimestamp(lastDashboardRefreshAt ?? undefined)}
             </p>
           </div>
         </div>

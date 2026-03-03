@@ -37,7 +37,7 @@ function createDb(encryptionKey?: string): DatabaseService {
 }
 
 describe('DatabaseService billing report', () => {
-  it('filters by extension correctly when encryption is enabled and masks parties in top calls', () => {
+  it('filters by extension correctly when encryption is enabled and returns decrypted parties in top calls', () => {
     const db = createDb('unit-test-secret');
 
     db.insertRecord(createRecord({
@@ -74,7 +74,7 @@ describe('DatabaseService billing report', () => {
     expect(report.topCostCalls).toHaveLength(2);
     expect(report.topCostCalls[0]?.calling_party).not.toContain(':');
     expect(report.topCostCalls[0]?.called_party).not.toContain(':');
-    expect(report.topCostCalls[0]?.calling_party).not.toBe('1001');
+    expect(report.topCostCalls[0]?.calling_party).toBe('1001');
   });
 
   it('supports category filter, sorting, and pagination for top cost calls', () => {

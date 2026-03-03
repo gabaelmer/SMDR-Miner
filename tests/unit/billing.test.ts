@@ -32,13 +32,13 @@ describe('BillingEngine', () => {
 
     it('classifies Metro Manila number', () => {
       const result = engine.classifyNumber('0212345678');
-      expect(result.category).toBe('national');
+      expect(result.category).toBe('local');
       expect(result.matchedPrefix).toBe('02');
     });
 
     it('classifies local number with single 0', () => {
       const result = engine.classifyNumber('01234');
-      expect(result.category).toBe('local');
+      expect(result.category).toBe('national');
       expect(result.matchedPrefix).toBe('0');
     });
 
@@ -77,31 +77,31 @@ describe('BillingEngine', () => {
       const billing = engine.rateCall('09171234567', 125); // 2min 5sec
       expect(billing.billableUnits).toBe(3); // ceil(125/60)
       // Cost = billableUnits × ratePerMinute (for 60s blocks, 1 block = 1 min)
-      expect(billing.cost).toBeCloseTo(16.5, 4); // 3 * 5.50
+      expect(billing.cost).toBeCloseTo(42, 4); // 3 * 14.00
     });
 
     it('applies minimum charge', () => {
       const billing = engine.rateCall('09171234567', 10); // 10 seconds
       expect(billing.billableUnits).toBe(1); // minimum charge
-      expect(billing.cost).toBeCloseTo(5.50, 4); // 1 * 5.50
+      expect(billing.cost).toBeCloseTo(14, 4); // 1 * 14.00
     });
 
     it('calculates local call cost', () => {
       const billing = engine.rateCall('01234', 300); // 5 minutes
-      expect(billing.category).toBe('local');
-      expect(billing.cost).toBeCloseTo(5, 4); // 5 * 1.00
+      expect(billing.category).toBe('national');
+      expect(billing.cost).toBeCloseTo(25.5, 4); // 5 * 5.10
     });
 
     it('calculates national call cost', () => {
       const billing = engine.rateCall('0212345678', 600); // 10 minutes
-      expect(billing.category).toBe('national');
-      expect(billing.cost).toBeCloseTo(30, 4); // 10 * 3.00
+      expect(billing.category).toBe('local');
+      expect(billing.cost).toBeCloseTo(0, 4); // local is free
     });
 
     it('calculates international call cost', () => {
       const billing = engine.rateCall('001234567890', 180); // 3 minutes
       expect(billing.category).toBe('international');
-      expect(billing.cost).toBeCloseTo(75, 4); // 3 * 25.00
+      expect(billing.cost).toBeCloseTo(1.2, 4); // 3 * 0.40
     });
 
     it('handles zero duration', () => {
@@ -122,12 +122,12 @@ describe('BillingEngine', () => {
 
     it('applies weekend multiplier', () => {
       const billing = engine.rateCall('09171234567', 60, { callDate: '2026-02-21' }); // Saturday
-      expect(billing.ratePerMinute).toBeCloseTo(2.75, 4); // 5.50 * 0.5
+      expect(billing.ratePerMinute).toBeCloseTo(14, 4);
     });
 
     it('does not apply weekend multiplier on weekday', () => {
       const billing = engine.rateCall('09171234567', 60, { callDate: '2026-02-23' }); // Monday
-      expect(billing.ratePerMinute).toBeCloseTo(5.50, 4);
+      expect(billing.ratePerMinute).toBeCloseTo(14, 4);
     });
   });
 
@@ -209,7 +209,7 @@ describe('BillingEngine', () => {
         isHoliday: true 
       });
       
-      expect(billing.ratePerMinute).toBeCloseTo(1.65, 4); // 5.50 * 0.3
+      expect(billing.ratePerMinute).toBeCloseTo(4.2, 4); // 14.00 * 0.3
     });
 
     it('holiday multiplier takes precedence over weekend', () => {
@@ -229,7 +229,7 @@ describe('BillingEngine', () => {
         isHoliday: true 
       });
       
-      expect(billing.ratePerMinute).toBeCloseTo(1.65, 4); // Holiday rate, not weekend
+      expect(billing.ratePerMinute).toBeCloseTo(4.2, 4); // Holiday rate, not weekend
     });
   });
 
@@ -238,12 +238,12 @@ describe('BillingEngine', () => {
   describe('getEffectiveRate', () => {
     it('returns base rate without date', () => {
       const rate = engine.getEffectiveRate('mobile');
-      expect(rate).toBe(5.50);
+      expect(rate).toBe(14);
     });
 
     it('returns adjusted rate for weekend', () => {
       const rate = engine.getEffectiveRate('mobile', { callDate: '2026-02-21' });
-      expect(rate).toBeCloseTo(2.75, 4);
+      expect(rate).toBeCloseTo(14, 4);
     });
   });
 

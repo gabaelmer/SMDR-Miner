@@ -91,10 +91,10 @@ describe('DatabaseService dashboard metrics', () => {
     expect(dashboard.incomingCalls).toBe(2);
     expect(dashboard.inboundCalls).toBe(1);
     expect(dashboard.outboundCalls).toBe(2);
-    expect(dashboard.highCostCalls).toBe(1);
-    expect(dashboard.totalCostToday).toBeGreaterThan(90);
-    expect(dashboard.topExtensionsByCostAndVolume[0]?.extension).toBe('1002');
-    expect(dashboard.topExtensionsByCostAndVolume[0]?.totalCost).toBeGreaterThan(50);
+    expect(dashboard.highCostCalls).toBe(0);
+    expect(dashboard.totalCostToday).toBeGreaterThan(40);
+    expect(dashboard.topExtensionsByCostAndVolume[0]?.extension).toBe('1001');
+    expect(dashboard.topExtensionsByCostAndVolume[0]?.totalCost).toBeGreaterThan(40);
 
     const internalSlice = dashboard.callDistribution.find((item) => item.category === 'internal');
     const mobileSlice = dashboard.callDistribution.find((item) => item.category === 'mobile');

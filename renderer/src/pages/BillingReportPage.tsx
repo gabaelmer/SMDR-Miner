@@ -269,40 +269,40 @@ export function BillingReportPage() {
           data && (
             <div className="grid gap-1.5 min-h-0 h-full xl:grid-cols-12 xl:grid-rows-[auto_auto_auto_minmax(0,1fr)]">
               {/* Row 1: KPI cards */}
-              <div className="card p-4 rounded-2xl xl:col-span-2" style={{ background: 'var(--surface-alt)', borderColor: 'var(--brand)', borderWidth: '1px' }}>
-                <div className="text-center mb-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Total Charges</p>
-                  <p className="text-2xl md:text-3xl font-bold mt-1.5" style={{ color: 'var(--brand)' }}>
+              <div className="card p-5 rounded-2xl xl:col-span-2" style={{ background: 'var(--surface-alt)', borderColor: 'var(--brand)', borderWidth: '1px' }}>
+                <div className="text-center mb-3">
+                  <p className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Total Charges</p>
+                  <p className="text-3xl md:text-4xl font-bold mt-2" style={{ color: 'var(--brand)' }}>
                     {categoryMetrics.primaryCurrency
                       ? fmtCur(totalCostNumeric, categoryMetrics.primaryCurrency)
                       : 'Multi-currency'}
                   </p>
                   {!categoryMetrics.primaryCurrency && (
-                    <p className="text-xs mt-1.5" style={{ color: 'var(--muted)' }}>{formatTotalsByCurrency(categoryMetrics.totalsByCurrency)}</p>
+                    <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>{formatTotalsByCurrency(categoryMetrics.totalsByCurrency)}</p>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                <div className="grid grid-cols-2 gap-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
                   <div className="text-center">
-                    <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>{grandCalls.toLocaleString()}</p>
-                    <p className="text-xs mt-1" style={{ color: 'var(--muted2)' }}>total calls</p>
+                    <p className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{grandCalls.toLocaleString()}</p>
+                    <p className="text-sm mt-1" style={{ color: 'var(--muted2)' }}>total calls</p>
                   </div>
                   <div className="text-center" style={{ borderLeft: '1px solid var(--border)' }}>
-                    <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>{fmtDur(grandDuration)}</p>
-                    <p className="text-xs mt-1" style={{ color: 'var(--muted2)' }}>talk time</p>
+                    <p className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{fmtDur(grandDuration)}</p>
+                    <p className="text-sm mt-1" style={{ color: 'var(--muted2)' }}>talk time</p>
                   </div>
                 </div>
               </div>
 
               {/* Avg cost per call KPI */}
-              <div className="card p-4 rounded-2xl xl:col-span-2" style={{ background: 'var(--surface-alt)' }}>
-                <div className="text-center">
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Avg Cost / Call</p>
-                  <p className="text-2xl font-bold mt-2" style={{ color: grandCalls > 0 ? '#f59e0b' : 'var(--muted)' }}>
+              <div className="card p-5 rounded-2xl xl:col-span-2" style={{ background: 'var(--surface-alt)' }}>
+                <div className="text-center h-full flex flex-col justify-center">
+                  <p className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Avg Cost / Call</p>
+                  <p className="text-4xl font-bold mt-3" style={{ color: grandCalls > 0 ? '#f59e0b' : 'var(--muted)' }}>
                     {grandCalls > 0
                       ? (categoryMetrics.primaryCurrency ? fmtCur(avgCostPerCall, categoryMetrics.primaryCurrency) : `${avgCostPerCall.toFixed(2)}`)
                       : '—'}
                   </p>
-                  <p className="text-xs mt-2" style={{ color: 'var(--muted2)' }}>across {grandCalls.toLocaleString()} calls</p>
+                  <p className="text-sm mt-2" style={{ color: 'var(--muted2)' }}>across {grandCalls.toLocaleString()} calls</p>
                 </div>
               </div>
 
@@ -378,30 +378,40 @@ export function BillingReportPage() {
 
               {/* Row 3: Top Spenders + Top Cost Calls Table */}
               {topSpenders.length > 0 && (
-                <div className="card p-3 xl:col-span-3 min-h-0 overflow-hidden flex flex-col">
-                  <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>
-                    Top Spenders by Extension
-                  </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px', fontSize: '9px', color: 'var(--muted2)', fontWeight: 600, textTransform: 'uppercase' }}>
+                <div className="card xl:col-span-3" style={{ padding: '14px 16px', minHeight: '300px', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexShrink: 0 }}>
+                    <div className="ct" style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text)' }}>Top Spenders by Extension</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: 'var(--muted2)' }}>
+                      <div className="etrk" style={{ height: '5px', width: '20px', borderRadius: '3px' }}>
+                        <div className="efil" style={{ width: '100%', height: '100%', background: 'linear-gradient(90deg, var(--brand), var(--purple))', borderRadius: '3px' }}></div>
+                      </div>
+                      <span>Cost</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px', fontSize: '10px', color: 'var(--muted2)', fontWeight: 700, textTransform: 'uppercase', flexShrink: 0 }}>
                     <div>Extension</div>
                     <div style={{ textAlign: 'right' }}>Calls / Cost</div>
                   </div>
-                  <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
+                  <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px' }}>
                     {topSpenders.map((s, i) => {
                       const maxCost = topSpenders[0].cost || 1;
-                      const pct = Math.round((s.cost / maxCost) * 100);
+                      const costPct = Math.max((s.cost / maxCost) * 100, 4);
                       return (
-                        <div key={s.ext} className="erow" style={{ padding: '6px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 10, color: 'var(--muted2)', minWidth: 16 }}>{i + 1}</span>
-                          <span className="mono" style={{ fontSize: 12, color: 'var(--text)', fontWeight: 600, width: 44 }}>{s.ext}</span>
-                          <div className="etrk" style={{ flex: 1 }}>
-                            <div className="efil" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, var(--brand), var(--purple))' }}></div>
+                        <button
+                          type="button"
+                          key={s.ext}
+                          className="erow"
+                          style={{ width: '100%', background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', padding: '8px 0' }}
+                        >
+                          <span className="mono" style={{ width: '48px', color: 'var(--text)', fontWeight: 700, fontSize: '12px' }}>{s.ext}</span>
+                          <div className="etrk" style={{ height: '5px' }}>
+                            <div className="efil" style={{ width: `${costPct}%`, background: 'linear-gradient(90deg, var(--brand), var(--purple))' }}></div>
                           </div>
-                          <div style={{ fontSize: 10, textAlign: 'right', minWidth: 96 }}>
-                            <div style={{ color: 'var(--muted2)' }}>{s.calls} calls</div>
-                            <div style={{ color: 'var(--brand)', fontWeight: 700 }}>{fmtCur(s.cost, s.currency)}</div>
+                          <div style={{ fontSize: '10px', color: 'var(--muted2)', width: '85px', textAlign: 'right' }}>
+                            <div style={{ fontWeight: 700, color: 'var(--text)', fontSize: '11px' }}>{s.calls}</div>
+                            <div style={{ color: 'var(--brand)', fontWeight: 700, fontSize: '11px' }}>{fmtCur(s.cost, s.currency)}</div>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>

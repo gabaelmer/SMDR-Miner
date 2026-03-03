@@ -9,6 +9,10 @@ interface ConnectionManagerEvents {
   event: (event: ConnectionEvent) => void;
 }
 
+const RECORD_HEADER_PATTERN = /^(?:@\d{8}@\s+)?(?:[%+\-])?(?:\d{2}[/-]\d{2}(?:[/-]\d{2,4})?|\d{4}-\d{2}-\d{2}|\d{6}|\d{8})\s+(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?P?|(?:[01]\d|2[0-3])[0-5]\d(?:[0-5]\d)?P?)\b/;
+const CONTINUATION_HINT_PATTERN = /^(?:\d{1,3}\b|[A-Z]\d{3,}\b|[*#0-9A-Za-z]+\s+\d{1,3}\b|\d+\s+[A-Z]\b)/;
+const PENDING_RECORD_FLUSH_MS = 750;
+
 export class ConnectionManager extends EventEmitter {
   private socket: net.Socket | null = null;
   private status: ConnectionStatus = 'disconnected';
@@ -142,7 +146,7 @@ export class ConnectionManager extends EventEmitter {
 
       for (const line of lines) {
         const clean = InputSanitizer.sanitizeLine(line);
-        if (clean) this.processIncomingLine(clean);
+        if (clean.trim()) this.processIncomingLine(clean);
       }
     });
 
@@ -293,25 +297,34 @@ export class ConnectionManager extends EventEmitter {
       return;
     }
 
-    if (this.pendingRecordLine) {
-      this.pendingRecordLine = `${this.pendingRecordLine} ${line}`;
+    if (this.pendingRecordLine && this.isLikelyContinuation(line)) {
+      const combined = `${this.pendingRecordLine} ${line}`;
+      this.pendingRecordLine = combined;
       this.schedulePendingRecordFlush();
       return;
     }
+
+    this.flushPendingRecord();
 
     // Fallback for single-line records that do not match known header formats.
     this.emit('line', line);
   }
 
   private isRecordHeader(line: string): boolean {
-    return /^%?(?:\d{2}[/-]\d{2}(?:[/-]\d{2,4})?|\d{4}-\d{2}-\d{2}|\d{6}|\d{8})\s+(?:\d{2}:\d{2}:\d{2}|\d{6})\b/.test(line);
+    return RECORD_HEADER_PATTERN.test(line.trimStart());
+  }
+
+  private isLikelyContinuation(line: string): boolean {
+    const trimmed = line.trim();
+    if (!trimmed || this.isRecordHeader(trimmed)) return false;
+    return CONTINUATION_HINT_PATTERN.test(trimmed);
   }
 
   private schedulePendingRecordFlush(): void {
     this.clearPendingRecordTimer();
     this.pendingRecordTimer = setTimeout(() => {
       this.flushPendingRecord();
-    }, 250);
+    }, PENDING_RECORD_FLUSH_MS);
   }
 
   private clearPendingRecordTimer(): void {

@@ -14,7 +14,7 @@ import {
 import { api } from '../lib/api';
 import { EMPTY_SUMMARY, normalizeAnalyticsSnapshot } from '../lib/analyticsSnapshot';
 
-export type PageId = 'dashboard' | 'calls' | 'analytics' | 'settings' | 'alerts' | 'billing' | 'billing-report' | 'diagnostics' | 'users';
+export type PageId = 'dashboard' | 'calls' | 'analytics' | 'settings' | 'alerts' | 'billing' | 'billing-report' | 'diagnostics' | 'users' | 'audit' | 'password-policy';
 export interface ServiceEventLog {
   id: string;
   type: string;
@@ -174,6 +174,7 @@ interface AppState {
   serviceEvents: ServiceEventLog[];
   recentRecordsCount: number;
   maxInMemoryRecords: number;
+  toast: { type: 'loading' | 'success' | 'error' | 'warning'; title: string; sub: string } | null;
 
   initialize: () => Promise<void>;
   login: (username: string, password: string) => Promise<boolean>;
@@ -181,7 +182,7 @@ interface AppState {
   setActivePage: (page: PageId) => void;
   toggleTheme: () => void;
   setFilters: (filters: Partial<RecordFilters>) => void;
-
+  setToast: (toast: { type: 'loading' | 'success' | 'error' | 'warning'; title: string; sub: string } | null) => void;
   refreshRecords: () => Promise<void>;
   refreshDashboard: (date?: string) => Promise<void>;
   refreshAnalytics: (startDate?: string, endDate?: string) => Promise<void>;
@@ -243,6 +244,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   serviceEvents: [],
   recentRecordsCount: 0,
   maxInMemoryRecords: 0,
+  toast: null,
 
   initialize: async () => {
     if (get().initialized) {
@@ -454,14 +456,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   login: async (username, password) => {
-    const ok = await api.login({ username, password });
-    if (ok) {
+    const result = await api.login({ username, password });
+    if (result.success) {
       set({ isAuthenticated: true });
       // Reset initialized flag to force data reload
       set({ initialized: false });
       await get().initialize();
     }
-    return ok;
+    return result;  // Return full result object with error message
   },
 
   logout: async () => {
@@ -487,6 +489,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setFilters: (filters) => set((state) => ({ filters: { ...state.filters, ...filters } })),
+
+  setToast: (toast) => set({ toast }),
 
   refreshRecords: async () => {
     set({ recordsLoading: true });

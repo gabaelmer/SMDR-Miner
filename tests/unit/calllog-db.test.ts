@@ -74,4 +74,25 @@ describe('DatabaseService call log pagination and summary', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.startTime).toBe('09:15:00');
   });
+
+  it('ignores duplicate ingestion of identical raw line on same date', () => {
+    const db = createDb();
+    const rawLine = '03/03 22:23:00  0000:00:25 2002    0001 2001                      I 2001                                  000';
+    const record = createRecord({
+      date: '2026-03-03',
+      startTime: '22:23:00',
+      duration: '0000:00:25',
+      callingParty: '2002',
+      calledParty: '2001',
+      rawLine
+    });
+
+    const insertedFirst = db.insertRecord(record);
+    const insertedSecond = db.insertRecord(record);
+    const rows = db.getRecords({ date: '2026-03-03' });
+
+    expect(insertedFirst).toBe(true);
+    expect(insertedSecond).toBe(false);
+    expect(rows).toHaveLength(1);
+  });
 });

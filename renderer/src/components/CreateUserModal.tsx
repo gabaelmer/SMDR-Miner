@@ -1,4 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { validatePasswordStrength, meetsMinimumRequirements, getStrengthColorClass, getStrengthTextClass } from '../../../shared/utils/passwordStrength';
+
+const MIN_LENGTH = 8;
+
+// Helper component for requirement checklist
+function RequirementCheck({ label, met }: { label: string; met: boolean }) {
+    return (
+        <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] ${met ? 'text-green-400' : 'text-gray-500'}`}>
+                {met ? '✓' : '○'}
+            </span>
+            <span className={`text-[10px] ${met ? 'text-green-300' : 'text-gray-500'}`}>
+                {label}
+            </span>
+        </div>
+    );
+}
 
 interface CreateUserModalProps {
     onClose: () => void;
@@ -11,6 +28,17 @@ export function CreateUserModal({ onClose, onCreate }: CreateUserModalProps) {
     const [role, setRole] = useState('user');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
+    const [passwordStrength, setPasswordStrength] = useState<ReturnType<typeof validatePasswordStrength> | null>(null);
+
+    // Update password strength when password changes
+    useEffect(() => {
+        if (password) {
+            setPasswordStrength(validatePasswordStrength(password));
+        } else {
+            setPasswordStrength(null);
+        }
+    }, [password]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -28,10 +56,21 @@ export function CreateUserModal({ onClose, onCreate }: CreateUserModalProps) {
             setError('Username can only use letters, numbers, dots, underscores, and hyphens');
             return;
         }
-        if (password.length < 6 || password.length > 100) {
-            setError('Password must be 6-100 characters');
+        
+        // Check minimum requirements
+        const minRequirements = meetsMinimumRequirements(password);
+        if (!minRequirements.valid) {
+            setError(minRequirements.errors.join('. '));
             return;
         }
+        
+        // Check strength score (require at least "Fair" = score 2)
+        const strength = validatePasswordStrength(password);
+        if (strength.score < 2) {
+            setError('Password is too weak. Please add more character types or increase length.');
+            return;
+        }
+        
         if (role !== 'admin' && role !== 'user') {
             setError('Invalid access level');
             return;
@@ -89,15 +128,78 @@ export function CreateUserModal({ onClose, onCreate }: CreateUserModalProps) {
                         <label className="text-xs font-semibold uppercase tracking-wider opacity-60" style={{ color: 'var(--text)' }}>
                             Password
                         </label>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full rounded-xl border px-3 py-2.5 text-sm"
-                            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                            placeholder="6-100 characters"
-                            maxLength={100}
-                        />
+                        <div className="relative">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full rounded-xl border px-3 py-2.5 text-sm pr-10"
+                                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                                placeholder="6-100 characters"
+                                maxLength={100}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs opacity-50 hover:opacity-100 transition-opacity"
+                                style={{ color: 'var(--text)' }}
+                            >
+                                {showPassword ? '🙈' : '👁️'}
+                            </button>
+                        </div>
+                        
+                        {/* Password Strength Meter */}
+                        {passwordStrength && (
+                            <div className="mt-3 space-y-2">
+                                {/* Strength Bar */}
+                                <div className="flex gap-1">
+                                    {[0, 1, 2, 3].map((index) => (
+                                        <div
+                                            key={index}
+                                            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                                                index < passwordStrength.score
+                                                    ? getStrengthColorClass(passwordStrength.color)
+                                                    : 'bg-gray-700'
+                                            }`}
+                                        />
+                                    ))}
+                                </div>
+                                
+                                {/* Strength Label */}
+                                <div className="flex items-center justify-between">
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider ${getStrengthTextClass(passwordStrength.color)}`}>
+                                        {passwordStrength.label}
+                                    </span>
+                                    <span className="text-[10px] opacity-50" style={{ color: 'var(--text)' }}>
+                                        {password.length} chars
+                                    </span>
+                                </div>
+                                
+                                {/* Requirements Checklist */}
+                                <div className="grid grid-cols-2 gap-1 mt-2">
+                                    <RequirementCheck
+                                        label={`${MIN_LENGTH}+ characters`}
+                                        met={passwordStrength.checks.hasMinLength}
+                                    />
+                                    <RequirementCheck label="Uppercase (A-Z)" met={passwordStrength.checks.hasUppercase} />
+                                    <RequirementCheck label="Lowercase (a-z)" met={passwordStrength.checks.hasLowercase} />
+                                    <RequirementCheck label="Numbers (0-9)" met={passwordStrength.checks.hasNumber} />
+                                    <RequirementCheck label="Special (!@#...)" met={passwordStrength.checks.hasSpecial} />
+                                </div>
+                                
+                                {/* Feedback */}
+                                {passwordStrength.feedback.length > 0 && passwordStrength.score < 4 && (
+                                    <div className="mt-2 p-2 rounded-lg bg-blue-900/20 border border-blue-800">
+                                        <p className="text-[10px] font-semibold text-blue-300">💡 Tips to strengthen:</p>
+                                        <ul className="mt-1 space-y-0.5">
+                                            {passwordStrength.feedback.slice(0, 3).map((tip, i) => (
+                                                <li key={i} className="text-[10px] text-blue-200/80">• {tip}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-1">

@@ -37,7 +37,7 @@ interface BillingReportFiltersProps {
   setTo: (value: string) => void;
   setExtension: (value: string) => void;
   setCategory: (value: 'all' | CallCategory) => void;
-  onApply: () => void;
+  onApply: (newFrom?: string, newTo?: string) => void;
   onExport: () => void;
   onExportCsv: () => void;
   loading: boolean;
@@ -75,6 +75,8 @@ export function BillingReportFilters({
     const { from: f, to: t } = applyPreset(preset);
     setFrom(f);
     setTo(t);
+    // Auto-apply with new values directly
+    onApply(f, t);
   };
 
   return (
@@ -180,7 +182,7 @@ export function BillingReportFilters({
             >
               {exporting ? <span className="spin">⟳</span> : 'Export PDF'}
             </button>
-            <button onClick={onApply} className="rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
+            <button onClick={() => onApply()} className="rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
               Apply
             </button>
           </div>

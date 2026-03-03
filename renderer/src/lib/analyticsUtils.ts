@@ -21,9 +21,9 @@ export function getPresetRange(preset: Exclude<RangePreset, 'custom'>): { startD
 }
 
 export function normalizeTransferLabel(flag: string): string {
-  if (flag === 'T') return 'T - Transfer';
-  if (flag === 'X') return 'X - Conference';
-  if (flag === 'C') return 'C - Conference';
+  if (flag === 'T') return 'Supervised Transfer';
+  if (flag === 'X') return 'Blind Transfer';
+  if (flag === 'C') return 'Conference';
   if (flag === 'none') return 'None';
   return flag;
 }

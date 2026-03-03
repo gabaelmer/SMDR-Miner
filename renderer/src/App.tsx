@@ -8,6 +8,8 @@ import { BillingSettingsPage } from './pages/BillingSettingsPage';
 import { BillingReportPage } from './pages/BillingReportPage';
 import { DiagnosticsPage } from './pages/DiagnosticsPage';
 import { UserManagementPage } from './pages/UserManagementPage';
+import { AuditLogPage } from './pages/AuditLogPage';
+import { PasswordPolicyPage } from './pages/PasswordPolicyPage';
 import { api } from './lib/api';
 import { PageId, useAppStore } from './state/appStore';
 import logo from './assets/logo.png';
@@ -39,6 +41,16 @@ const navItems: Array<{ id: PageId; label: string; icon: React.ReactNode; badge?
     icon: <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 1c-2 0-6 1-6 3v1h12v-1c0-2-4-3-6-3z"/></svg>
   },
   {
+    id: 'audit',
+    label: 'Audit Log',
+    icon: <svg viewBox="0 0 16 16" fill="currentColor"><path d="M14 11H2V3h12v8zM2 1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z"/><circle cx="6" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="10" cy="6" r="1"/></svg>
+  },
+  {
+    id: 'password-policy',
+    label: 'Password Policy',
+    icon: <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm0 5c1.5 0 3 .8 3 2v1H5v-1c0-1.2 1.5-2 3-2z"/></svg>
+  },
+  {
     id: 'billing',
     label: 'Billing Config',
     icon: <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.5 10.5h-1v-1h1v1zm0-2.5h-1V4.5h1V9z"/></svg>
@@ -66,6 +78,8 @@ const pageTitles: Record<PageId, { title: string; subtitle: string }> = {
   analytics: { title: 'Analytics', subtitle: 'Volume & correlation insights' },
   alerts: { title: 'Alerts', subtitle: 'Active alerts' },
   users: { title: 'Users', subtitle: 'User management' },
+  audit: { title: 'Audit Log', subtitle: 'System activity tracking' },
+  'password-policy': { title: 'Password Policy', subtitle: 'Security requirements' },
   billing: { title: 'Billing Config', subtitle: 'Prefix rules & rates' },
   'billing-report': { title: 'Billing Report', subtitle: 'Cost breakdown & trends' },
   diagnostics: { title: 'Diagnostics', subtitle: 'System health & events' },
@@ -89,6 +103,8 @@ export default function App() {
   const activeController = useAppStore((state) => state.activeController);
   const dashboard = useAppStore((state) => state.dashboard);
   const alerts = useAppStore((state) => state.alerts);
+  const toast = useAppStore((state) => state.toast);
+  const setToast = useAppStore((state) => state.setToast);
 
   // Update clock every second
   useEffect(() => {
@@ -97,6 +113,26 @@ export default function App() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Auto-hide toast (non-loading toasts hide after 4s, loading toasts timeout after 30s as safeguard)
+  useEffect(() => {
+    if (!toast) return;
+    
+    // Loading toasts don't auto-hide by default, but add a 30s safeguard timeout
+    if (toast.type === 'loading') {
+      const timeout = setTimeout(() => {
+        console.warn('[Toast] Loading toast timeout after 30s, auto-hiding:', toast.title);
+        setToast(null);
+      }, 30000);
+      return () => clearTimeout(timeout);
+    }
+    
+    // Non-loading toasts hide after 4s
+    const timer = setTimeout(() => {
+      setToast(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [toast, setToast]);
 
   // Format date and time
   const formatDateTime = (date: Date) => {
@@ -169,6 +205,8 @@ export default function App() {
     if (activePage === 'analytics') return <AnalyticsPage />;
     if (activePage === 'alerts') return <AlertsPage />;
     if (activePage === 'users') return <UserManagementPage />;
+    if (activePage === 'audit') return <AuditLogPage />;
+    if (activePage === 'password-policy') return <PasswordPolicyPage />;
     if (activePage === 'settings') return <SettingsPage />;
     if (activePage === 'billing') return <BillingSettingsPage />;
     if (activePage === 'billing-report') return <BillingReportPage />;
@@ -178,8 +216,11 @@ export default function App() {
 
   const handleLogin = async () => {
     try {
-      const ok = await login(loginForm.username, loginForm.password);
-      if (!ok) setError('Invalid username or password');
+      const result = await login(loginForm.username, loginForm.password);
+      if (!result.success) {
+        // Show the actual error from backend (lockout message, invalid credentials, etc.)
+        setError(result.error || 'Invalid username or password');
+      }
     } catch (loginError) {
       console.error('Login failed', loginError);
       setError('Login service error occurred');
@@ -367,26 +408,35 @@ export default function App() {
         </div>
 
         {/* Navigation - Monitor Section */}
-        <div style={{ padding: '13px 9px 4px' }}>
-          <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--muted2)', padding: '0 7px', marginBottom: '4px' }}>Monitor</div>
+        <div style={{ padding: '16px 12px 8px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1.2px', color: 'var(--muted2)', padding: '0 7px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '10px', height: '10px', background: 'var(--brand)', borderRadius: '3px', display: 'inline-block' }}></span>
+            Monitor
+          </div>
           {navItems.filter(i => ['dashboard', 'calls', 'analytics', 'alerts'].includes(i.id)).map((item) => (
             <NavItem key={item.id} item={item} active={activePage === item.id} onClick={() => setActivePage(item.id)} />
           ))}
         </div>
 
         {/* Navigation - Billing Section */}
-        <div style={{ padding: '13px 9px 4px' }}>
-          <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--muted2)', padding: '0 7px', marginBottom: '4px' }}>Billing</div>
+        <div style={{ padding: '16px 12px 8px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1.2px', color: 'var(--muted2)', padding: '0 7px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '10px', height: '10px', background: 'var(--orange)', borderRadius: '3px', display: 'inline-block' }}></span>
+            Billing
+          </div>
           {navItems.filter(i => ['billing', 'billing-report'].includes(i.id)).map((item) => (
             <NavItem key={item.id} item={item} active={activePage === item.id} onClick={() => setActivePage(item.id)} />
           ))}
         </div>
 
         {/* Navigation - System Section */}
-        <div style={{ padding: '13px 9px 4px' }}>
-          <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.4px', color: 'var(--muted2)', padding: '0 7px', marginBottom: '4px' }}>System</div>
+        <div style={{ padding: '16px 12px 8px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1.2px', color: 'var(--muted2)', padding: '0 7px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '10px', height: '10px', background: 'var(--purple)', borderRadius: '3px', display: 'inline-block' }}></span>
+            System
+          </div>
           {navItems.filter((i) => {
-            const allowed = ['users', 'diagnostics', ...(currentUserRole === 'admin' ? ['settings'] : [])];
+            const allowed = ['users', 'audit', 'password-policy', 'diagnostics', ...(currentUserRole === 'admin' ? ['settings'] : [])];
             return allowed.includes(i.id);
           }).map((item) => (
             <NavItem key={item.id} item={item} active={activePage === item.id} onClick={() => setActivePage(item.id)} />
@@ -450,36 +500,44 @@ export default function App() {
         <header style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          padding: '9px 18px',
-          background: 'rgba(13, 23, 48, 0.85)',
+          gap: '12px',
+          padding: '12px 20px',
+          background: 'rgba(15, 26, 51, 0.85)',
           borderBottom: '1px solid var(--border2)',
-          backdropFilter: 'blur(8px)',
-          flexShrink: 0
+          backdropFilter: 'blur(12px)',
+          flexShrink: 0,
+          boxShadow: '0 2px 8px rgba(2, 6, 18, 0.2)'
         }}>
-          <span className="ptitle" style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '-0.3px' }}>{currentPage.title}</span>
-          <span className="psub" style={{ fontSize: '10.5px', color: 'var(--muted2)', marginLeft: '6px' }}>{currentPageSubtitle}</span>
-          
+          <div>
+            <span className="ptitle" style={{ fontSize: '16px', fontWeight: 800, letterSpacing: '-0.3px', color: 'var(--text)' }}>{currentPage.title}</span>
+            <span className="psub" style={{ fontSize: '11px', color: 'var(--muted2)', marginLeft: '8px' }}>{currentPageSubtitle}</span>
+          </div>
+
           {/* Center Clock */}
-          <div style={{ 
-            marginLeft: 'auto', 
+          <div style={{
+            marginLeft: 'auto',
             marginRight: 'auto',
-            display: 'flex', 
+            display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '2px'
+            gap: '2px',
+            padding: '6px 14px',
+            background: 'var(--surface-alt)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border2)'
           }}>
-            <div style={{ 
-              fontSize: '11px', 
-              fontWeight: 600, 
-              color: 'var(--text)',
-              letterSpacing: '0.5px'
+            <div style={{
+              fontSize: '10px',
+              fontWeight: 600,
+              color: 'var(--muted2)',
+              letterSpacing: '0.5px',
+              textTransform: 'uppercase'
             }}>
               {dateTime.date}
             </div>
-            <div style={{ 
-              fontSize: '13px', 
-              fontWeight: 700, 
+            <div style={{
+              fontSize: '14px',
+              fontWeight: 700,
               color: 'var(--brand)',
               fontFamily: 'JetBrains Mono, monospace',
               letterSpacing: '1px'
@@ -487,8 +545,8 @@ export default function App() {
               {dateTime.time}
             </div>
           </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div className="live-badge" style={{
               background: connectionStatus === 'connected' 
                 ? 'var(--green-dim)' 
@@ -537,7 +595,7 @@ export default function App() {
         <div className="content" style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '16px 18px',
+          padding: '10px 14px',
           scrollbarWidth: 'thin',
           scrollbarColor: 'var(--border2) transparent'
         }}>
@@ -547,13 +605,19 @@ export default function App() {
         </div>
 
         {/* TOAST */}
-        <div id="toast">
-          <div className="tico tload" id="ticon"><span className="spin">⟳</span></div>
-          <div>
-            <div className="ttl" id="ttl">Processing...</div>
-            <div className="tsb" id="tsb">Please wait</div>
+        {toast && (
+          <div id="toast" className={toast.type === 'loading' ? 'show' : 'show'}>
+            <div className={`tico ${toast.type === 'success' ? 'tsuc' : toast.type === 'error' ? 'terr' : toast.type === 'warning' ? 'twarn' : 'tload'}`}>
+              {toast.type === 'loading' ? <span className="spin">⟳</span> : 
+               toast.type === 'success' ? '✓' : 
+               toast.type === 'error' ? '✕' : '⚠'}
+            </div>
+            <div>
+              <div className="ttl" id="ttl">{toast.title}</div>
+              <div className="tsb" id="tsb">{toast.sub}</div>
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
@@ -561,79 +625,82 @@ export default function App() {
 
 // NavItem Component
 function NavItem({ item, active, onClick }: { item: typeof navItems[0]; active: boolean; onClick: () => void }) {
+  const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
 
   return (
     <div
       onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => { setIsHovered(false); setIsPressed(false); }}
       onMouseDown={() => setIsPressed(true)}
       onMouseUp={() => setIsPressed(false)}
-      onMouseLeave={() => setIsPressed(false)}
-      className={`nav-item ${active ? 'active' : ''}`}
+      className="nav-item"
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        padding: '8px 10px',
-        borderRadius: '10px',
+        gap: '10px',
+        padding: '10px 12px',
+        borderRadius: 'var(--radius-md)',
         cursor: 'pointer',
         color: active ? '#fff' : 'var(--muted)',
-        fontSize: '12.5px',
+        fontSize: '13px',
         fontWeight: 600,
-        transition: 'all 0.15s ease',
-        marginBottom: '2px',
+        transition: 'all var(--transition-base)',
+        marginBottom: '4px',
         border: '1px solid',
-        borderColor: active ? 'rgba(36, 132, 235, 0.3)' : 'transparent',
-        background: active 
-          ? 'linear-gradient(135deg, rgba(36, 132, 235, 0.2), rgba(36, 132, 235, 0.1))'
+        borderColor: active ? 'rgba(36, 132, 235, 0.4)' : 'transparent',
+        background: active
+          ? 'linear-gradient(135deg, rgba(36, 132, 235, 0.25), rgba(36, 132, 235, 0.15))'
+          : isHovered
+          ? 'rgba(255, 255, 255, 0.03)'
           : 'transparent',
         userSelect: 'none',
-        transform: isPressed ? 'scale(0.96)' : 'scale(1)',
-        boxShadow: active 
-          ? '0 2px 8px rgba(36, 132, 235, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+        transform: isPressed ? 'scale(0.97)' : 'scale(1)',
+        boxShadow: active
+          ? '0 3px 12px rgba(36, 132, 235, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
           : 'none',
         position: 'relative',
         overflow: 'hidden'
       }}
     >
-      {/* Hover effect overlay */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: active 
-          ? 'rgba(36, 132, 235, 0.15)' 
-          : 'rgba(255, 255, 255, 0.03)',
-        opacity: isPressed ? 0.3 : 0,
-        transition: 'opacity 0.15s ease',
-        pointerEvents: 'none'
-      }} />
-      
-      <svg className="ni" style={{ 
-        width: '14px', 
-        height: '14px', 
-        opacity: active ? 1 : 0.7, 
+      {/* Active indicator bar */}
+      {active && (
+        <div style={{
+          position: 'absolute',
+          left: 0,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: '3px',
+          height: '60%',
+          background: 'var(--brand)',
+          borderRadius: '0 2px 2px 0'
+        }} />
+      )}
+
+      <svg className="ni" style={{
+        width: '16px',
+        height: '16px',
+        opacity: active ? 1 : isHovered ? 0.85 : 0.65,
         flexShrink: 0,
-        filter: active ? 'drop-shadow(0 1px 2px rgba(36, 132, 235, 0.3))' : 'none',
-        transition: 'transform 0.15s ease, opacity 0.15s ease',
-        transform: isPressed ? 'scale(0.9)' : 'scale(1)'
+        filter: active ? 'drop-shadow(0 2px 4px rgba(36, 132, 235, 0.4))' : 'none',
+        transition: 'all var(--transition-base)',
+        transform: isPressed ? 'scale(0.9)' : isHovered ? 'scale(1.05)' : 'scale(1)'
       }} viewBox="0 0 16 16" fill="currentColor">
         {item.icon}
       </svg>
-      {item.label}
+      <span style={{ flex: 1 }}>{item.label}</span>
       {item.badge && (
         <span className={`nbadge ${item.badgeType === 'alert' ? 'nalert' : 'nnew'}`} style={{
-          marginLeft: 'auto',
           fontSize: '9px',
           fontWeight: 700,
-          padding: '1px 6px',
+          padding: '2px 7px',
           borderRadius: '20px',
-          background: item.badgeType === 'alert' ? 'rgba(239, 68, 68, 0.14)' : 'rgba(38, 182, 127, 0.14)',
-          color: item.badgeType === 'alert' ? 'var(--red)' : 'var(--green)',
-          transition: 'transform 0.15s ease',
-          transform: isPressed ? 'scale(0.95)' : 'scale(1)'
+          background: item.badgeType === 'alert' ? 'rgba(239, 68, 68, 0.18)' : 'var(--brand-glow)',
+          color: item.badgeType === 'alert' ? 'var(--red)' : 'var(--brand)',
+          border: `1px solid ${item.badgeType === 'alert' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(36, 132, 235, 0.25)'}`,
+          transition: 'transform var(--transition-fast)',
+          transform: isPressed ? 'scale(0.9)' : 'scale(1)'
         }}>
           {item.badge}
         </span>

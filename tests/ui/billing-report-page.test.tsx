@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React, { ReactNode } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BillingReportData } from '../../shared/types';
 import { BillingReportPage } from '../../renderer/src/pages/BillingReportPage';
 
@@ -75,10 +75,14 @@ function deferred<T>() {
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe('BillingReportPage', () => {
+  beforeEach(() => {
+    getBillingReportMock.mockResolvedValue(buildReport());
+  });
+
   it('keeps latest response when earlier request resolves later', async () => {
     const first = deferred<BillingReportData>();
     const second = deferred<BillingReportData>();
@@ -92,12 +96,12 @@ describe('BillingReportPage', () => {
     second.resolve(buildReport({
       topCostCalls: [{ ...buildReport().topCostCalls[0], id: 2, calling_party: 'LATEST' }]
     }));
-    await waitFor(() => expect(screen.getByText('LATEST')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('LATEST').length).toBeGreaterThan(0));
 
     first.resolve(buildReport({
       topCostCalls: [{ ...buildReport().topCostCalls[0], id: 3, calling_party: 'STALE' }]
     }));
-    await waitFor(() => expect(screen.queryByText('STALE')).toBeNull());
+    await waitFor(() => expect(screen.queryAllByText('STALE').length).toBe(0));
   });
 
   it('shows blocking error state on initial load failure', async () => {
@@ -113,16 +117,16 @@ describe('BillingReportPage', () => {
     getBillingReportMock.mockResolvedValueOnce(buildReport()).mockRejectedValueOnce(new Error('refresh failed'));
     render(<BillingReportPage />);
 
-    await waitFor(() => expect(screen.getByText('1001')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('1001').length).toBeGreaterThan(0));
     fireEvent.change(screen.getByPlaceholderText('e.g. 1001'), { target: { value: '2002' } });
     fireEvent.click(screen.getByText('Apply'));
 
     await waitFor(() => expect(screen.getByText('Showing previous successful data. Retry to refresh.')).toBeTruthy());
-    expect(screen.getByText('1001')).toBeTruthy();
+    expect(screen.getAllByText('1001').length).toBeGreaterThan(0);
   });
 
   it('shows export warning when top call total exceeds selected export cap', async () => {
-    getBillingReportMock.mockResolvedValueOnce(buildReport({ topCostCallsTotal: 2000 }));
+    getBillingReportMock.mockResolvedValue(buildReport({ topCostCallsTotal: 2000 }));
     render(<BillingReportPage />);
 
     await waitFor(() => expect(screen.getByText(/Top Cost Calls \(2,000\)/)).toBeTruthy());

@@ -10,6 +10,7 @@ import type {
   ExportOptions,
   RecordFilters,
   ServiceState,
+  SMDRImportResult,
   SMDRRecord
 } from '../../shared/types';
 
@@ -31,6 +32,7 @@ interface DesktopApi {
   exportRecords: (options: ExportOptions) => Promise<string>;
   exportRecordsWithDialog: (options: ExportDialogOptions) => Promise<string | null>;
   purgeRecords: (days: number) => Promise<number>;
+  importSmdrText?: (payload: { fileName?: string; content: string }) => Promise<SMDRImportResult>;
   onServiceEvent: (callback: (event: { type: string; payload: unknown }) => void) => () => void;
   log: (level: string, message: string) => void;
 }

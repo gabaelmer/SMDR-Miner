@@ -21,11 +21,18 @@ export function UserActivityLog({ enabled = true }: UserActivityLogProps) {
         try {
             setLoading(true);
             setError(null);
-            const data = await api.getAuditLogs({ limit: 10 });
-            setLogs(data);
+            const result = await api.getAuditLogs({ limit: 10 });
+            if (Array.isArray(result)) {
+                setLogs(result as AuditEntry[]);
+            } else if (result && Array.isArray((result as { data?: unknown }).data)) {
+                setLogs((result as { data: AuditEntry[] }).data);
+            } else {
+                setLogs([]);
+            }
         } catch (err) {
             console.error('Failed to fetch activity logs:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch activity logs');
+            setLogs([]);
         } finally {
             setLoading(false);
         }
