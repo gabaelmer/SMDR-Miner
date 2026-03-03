@@ -12,3 +12,10 @@ config/config-history/
 config/settings*.json
 !config/settings.json.example
 config/billing*.json
+
+# Local backup/temp artifacts
+*.bak
+*.backup
+*.orig
+*.rej
+*.new.tsx
