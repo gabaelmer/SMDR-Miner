@@ -50,8 +50,6 @@ export function CallLogPage() {
   const totalTalkTime = formatDuration(callLogSummary.totalDurationSeconds);
   const topExtensionsMade = callLogSummary.topExtensionsMade;
   const topExtensionsReceived = callLogSummary.topExtensionsReceived;
-  const topExtensionsMadeDisplay = topExtensionsMade.slice(0, 5);
-  const topExtensionsReceivedDisplay = topExtensionsReceived.slice(0, 5);
 
   const activeFilterChips = useMemo<FilterChip[]>(() => {
     const chips: FilterChip[] = [];
@@ -413,8 +411,8 @@ export function CallLogPage() {
             </span>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', maxHeight: '180px' }}>
-            {topExtensionsMadeDisplay.map((ext, idx) => (
-              <div key={ext.extension} className="flex justify-between items-center py-2" style={{ borderBottom: idx < topExtensionsMadeDisplay.length - 1 ? '1px solid var(--border2)' : 'none' }}>
+            {topExtensionsMade.map((ext, idx) => (
+              <div key={ext.extension} className="flex justify-between items-center py-2" style={{ borderBottom: idx < topExtensionsMade.length - 1 ? '1px solid var(--border2)' : 'none' }}>
                 <span className="mono text-sm" style={{ color: 'var(--text)', fontWeight: 600 }}>{ext.extension}</span>
                 <span className="text-xs" style={{ color: 'var(--muted2)' }}>{ext.count} calls</span>
               </div>
@@ -433,8 +431,8 @@ export function CallLogPage() {
             </span>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', maxHeight: '180px' }}>
-            {topExtensionsReceivedDisplay.map((ext, idx) => (
-              <div key={ext.extension} className="flex justify-between items-center py-2" style={{ borderBottom: idx < topExtensionsReceivedDisplay.length - 1 ? '1px solid var(--border2)' : 'none' }}>
+            {topExtensionsReceived.map((ext, idx) => (
+              <div key={ext.extension} className="flex justify-between items-center py-2" style={{ borderBottom: idx < topExtensionsReceived.length - 1 ? '1px solid var(--border2)' : 'none' }}>
                 <span className="mono text-sm" style={{ color: 'var(--text)', fontWeight: 600 }}>{ext.extension}</span>
                 <span className="text-xs" style={{ color: 'var(--muted2)' }}>{ext.count} calls</span>
               </div>

@@ -27,10 +27,15 @@ SMDR Insight is a web-based Mitel SMDR collector, parser, analytics, and billing
 - Improved Call Log table:
   - completion code indicators/legend,
   - cleaner pagination layout and controls.
+- Updated Billing + Alerts layouts:
+  - billing report/table containers now keep scroll localized,
+  - top extension widgets now show full ranking with scroll,
+  - alerts page now uses a fixed viewport container with only alert list scrolling.
 - Hardened Debian/Ubuntu installer:
   - supports root and sudo-based install flows,
   - installs required system tooling automatically,
-  - rebuilds from repo source so latest pushed changes are always included.
+  - rebuilds from repo source so latest pushed changes are always included,
+  - removes stale release files on upgrade while preserving `config/` data.
 
 ## Build / Release Checklist
 
@@ -98,6 +103,7 @@ Installer behavior:
 - Installs OS tools/dependencies automatically (`git`, `curl`, `build-essential`, `python3`, `fontconfig`, `ufw`, etc.)
 - Installs/updates Node.js 24.x automatically
 - Clones/updates source in `/opt/smdr-insight`
+- On upgrade, hard-resets to the selected git ref and cleans stale files (preserves `/opt/smdr-insight/config`)
 - Installs npm dependencies and rebuilds native modules (`better-sqlite3`)
 - Rebuilds app from source (`npm run build`) so all pushed frontend/backend changes are included
 - Creates and starts `smdr-insight.service`

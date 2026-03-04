@@ -648,17 +648,7 @@ export function BillingSettingsPage() {
               ))}
             </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 self-start">
-            <label className="text-xs" style={{ color: 'var(--muted)' }}>
-              Billing Enabled
-              <button
-                type="button"
-                onClick={() => patchDraft((cfg) => ({ ...cfg, enabled: !cfg.enabled }))}
-                className={`ml-2 inline-flex h-5 w-10 items-center rounded-full transition ${draftConfig.enabled ? 'bg-brand-600' : 'bg-gray-600'}`}
-              >
-                <span className={`h-4 w-4 rounded-full bg-white transition ${draftConfig.enabled ? 'translate-x-5' : 'translate-x-1'}`} />
-              </button>
-            </label>
+          <div className="grid gap-2 sm:grid-cols-2 self-start">
             <label className="text-xs" style={{ color: 'var(--muted)' }}>
               Default Currency
               <select
@@ -695,18 +685,31 @@ export function BillingSettingsPage() {
             </div>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-          {hasUnsavedChanges ? (
-            <span className="rounded-full border px-2 py-0.5" style={{ color: '#f59e0b', borderColor: '#f59e0b44' }}>
-              Unsaved changes
-            </span>
-          ) : (
-            <span className="rounded-full border px-2 py-0.5" style={{ color: 'var(--green)', borderColor: 'rgba(38,182,127,0.35)' }}>
-              All changes saved
-            </span>
-          )}
-          {statusMsg && <span style={{ color: 'var(--green)' }}>{statusMsg}</span>}
-          {errorMsg && <span style={{ color: 'var(--red)' }}>{errorMsg}</span>}
+        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            {hasUnsavedChanges ? (
+              <span className="rounded-full border px-2 py-0.5" style={{ color: '#f59e0b', borderColor: '#f59e0b44' }}>
+                Unsaved changes
+              </span>
+            ) : (
+              <span className="rounded-full border px-2 py-0.5" style={{ color: 'var(--green)', borderColor: 'rgba(38,182,127,0.35)' }}>
+                All changes saved
+              </span>
+            )}
+            {statusMsg && <span style={{ color: 'var(--green)' }}>{statusMsg}</span>}
+            {errorMsg && <span style={{ color: 'var(--red)' }}>{errorMsg}</span>}
+          </div>
+          <label className="inline-flex items-center gap-3 text-sm font-semibold justify-self-center" style={{ color: 'var(--muted)' }}>
+            Billing Enabled
+            <button
+              type="button"
+              onClick={() => patchDraft((cfg) => ({ ...cfg, enabled: !cfg.enabled }))}
+              className={`inline-flex h-7 w-14 items-center rounded-full transition ${draftConfig.enabled ? 'bg-brand-600' : 'bg-gray-600'}`}
+            >
+              <span className={`h-6 w-6 rounded-full bg-white transition ${draftConfig.enabled ? 'translate-x-7' : 'translate-x-1'}`} />
+            </button>
+          </label>
+          <div />
         </div>
       </div>
 
@@ -795,7 +798,7 @@ export function BillingSettingsPage() {
             )}
           </div>
 
-          <div className="card p-4" style={{ height: 'clamp(460px, 70vh, 860px)', display: 'flex', flexDirection: 'column' }}>
+          <div className="card p-4" style={{ height: 'clamp(422px, calc(70vh - 38px), 822px)', display: 'flex', flexDirection: 'column' }}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2" style={{ flexShrink: 0 }}>
               <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
                 Rules are matched by priority (asc), then prefix length (desc).

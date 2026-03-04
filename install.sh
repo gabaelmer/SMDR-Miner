@@ -258,8 +258,11 @@ prepare_source() {
     log_info "Existing git checkout found. Updating to ${REPO_REF}..."
     chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
     git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
-    git -C "$INSTALL_DIR" fetch --depth 1 origin "$REPO_REF"
+    git -C "$INSTALL_DIR" fetch --depth 1 --prune origin "$REPO_REF"
     git -C "$INSTALL_DIR" checkout -B "$REPO_REF" FETCH_HEAD
+    git -C "$INSTALL_DIR" reset --hard FETCH_HEAD
+    # Remove stale files from previous releases while preserving runtime config/state.
+    git -C "$INSTALL_DIR" clean -fd -e config/ -e config/** || true
   else
     if [[ -d "$INSTALL_DIR" ]] && [[ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
       local backup_path="${BACKUP_DIR}/preinstall-$(date +%Y%m%d-%H%M%S)"

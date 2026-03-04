@@ -262,12 +262,12 @@ export function BillingReportPage() {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto xl:overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {loading && !data ? (
           <div className="card p-8 text-center text-sm" style={{ color: 'var(--muted)' }}>Loading...</div>
         ) : (
           data && (
-            <div className="grid gap-1.5 min-h-0 h-full xl:grid-cols-12 xl:grid-rows-[auto_auto_auto_minmax(0,1fr)]">
+            <div className="grid gap-1.5 min-h-0 h-full overflow-hidden xl:grid-cols-12 xl:grid-rows-[auto_auto_auto_minmax(0,1fr)]">
               {/* Row 1: KPI cards */}
               <div className="card p-5 rounded-2xl xl:col-span-2" style={{ background: 'var(--surface-alt)', borderColor: 'var(--brand)', borderWidth: '1px' }}>
                 <div className="text-center mb-3">
@@ -378,7 +378,7 @@ export function BillingReportPage() {
 
               {/* Row 3: Top Spenders + Top Cost Calls Table */}
               {topSpenders.length > 0 && (
-                <div className="card xl:col-span-3" style={{ padding: '14px 16px', minHeight: '300px', display: 'flex', flexDirection: 'column' }}>
+                <div className="card xl:col-span-3" style={{ padding: '14px 16px', minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexShrink: 0 }}>
                     <div className="ct" style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text)' }}>Top Spenders by Extension</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: 'var(--muted2)' }}>
@@ -418,7 +418,7 @@ export function BillingReportPage() {
                 </div>
               )}
 
-              <div className={`min-h-0 xl:col-span-${topSpenders.length > 0 ? 9 : 12}`}>
+              <div className={topSpenders.length > 0 ? 'min-h-0 xl:col-span-9' : 'min-h-0 xl:col-span-12'}>
                 <TopCostCallsTable
                   topCostCalls={data.topCostCalls}
                   topCallsTotal={topCallsTotal}

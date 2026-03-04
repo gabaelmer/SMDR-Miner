@@ -435,8 +435,8 @@ export function AlertsPage() {
   };
 
   return (
-    <div className="gap">
-      <div className="grid gap-3 md:grid-cols-4">
+    <div className="gap h-[calc(100vh-148px)] min-h-0 overflow-hidden flex flex-col">
+      <div className="grid gap-3 md:grid-cols-4 shrink-0">
         <div className="card p-3">
           <p className="text-xs" style={{ color: 'var(--muted2)' }}>Total Alerts</p>
           <p className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{stats.total}</p>
@@ -456,7 +456,7 @@ export function AlertsPage() {
         </div>
       </div>
 
-      <div className="card" style={{ padding: '12px 15px' }}>
+      <div className="card shrink-0" style={{ padding: '12px 15px' }}>
         <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr auto auto', alignItems: 'end' }}>
           <div>
             <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Search</p>
@@ -579,7 +579,7 @@ export function AlertsPage() {
         </div>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-4 shrink-0">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span className="ct">Notification Routing Status</span>
           <span style={{ fontSize: '11px', color: 'var(--muted2)' }}>
@@ -627,7 +627,7 @@ export function AlertsPage() {
       </div>
 
       {activeMutes.length > 0 && (
-        <div className="card p-3">
+        <div className="card p-3 shrink-0">
           <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Muted Alert Types</p>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
             {activeMutes.map(([type, until]) => {
@@ -647,127 +647,132 @@ export function AlertsPage() {
         </div>
       )}
 
-      <div className="gap">
-        {pagedGroups.map((group) => {
-          const icon = ALERT_ICONS[group.type] || '⚠';
-          const bgColor = ALERT_COLORS[group.type] || 'rgba(95, 110, 136, 0.1)';
-          const textColor = ALERT_TEXT_COLORS[group.type] || 'var(--muted)';
-          const statusColor =
-            group.status === 'resolved'
-              ? 'var(--green)'
-              : group.status === 'acknowledged'
-                ? 'var(--orange)'
-                : 'var(--red)';
+      <div className="card p-3 min-h-0 flex flex-col">
+        <div className="gap min-h-0 flex-1 overflow-y-auto pr-1">
+          {pagedGroups.map((group) => {
+            const icon = ALERT_ICONS[group.type] || '⚠';
+            const bgColor = ALERT_COLORS[group.type] || 'rgba(95, 110, 136, 0.1)';
+            const textColor = ALERT_TEXT_COLORS[group.type] || 'var(--muted)';
+            const statusColor =
+              group.status === 'resolved'
+                ? 'var(--green)'
+                : group.status === 'acknowledged'
+                  ? 'var(--orange)'
+                  : 'var(--red)';
 
-          return (
-            <div key={group.groupKey} className="card acard">
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div className="aico" style={{ background: bgColor, color: textColor }}>
-                  {icon}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '12.5px', fontWeight: 700, color: textColor }}>
-                        {group.type.toUpperCase().replace(/-/g, '_')}
-                      </span>
-                      <span className="badge" style={{ color: statusColor, borderColor: `${statusColor}66`, background: `${statusColor}22` }}>
-                        {group.status}
-                      </span>
-                      <span className="badge" style={{ color: 'var(--brand)', borderColor: 'rgba(36,132,235,.35)', background: 'rgba(36,132,235,.12)' }}>
-                        {group.severity}
-                      </span>
-                      {group.count > 1 && (
-                        <span className="badge" style={{ color: 'var(--text)', borderColor: 'var(--border)', background: 'var(--surface-alt)' }}>
-                          {group.count} grouped
+            return (
+              <div key={group.groupKey} className="card acard">
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div className="aico" style={{ background: bgColor, color: textColor }}>
+                    {icon}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '12.5px', fontWeight: 700, color: textColor }}>
+                          {group.type.toUpperCase().replace(/-/g, '_')}
                         </span>
+                        <span className="badge" style={{ color: statusColor, borderColor: `${statusColor}66`, background: `${statusColor}22` }}>
+                          {group.status}
+                        </span>
+                        <span className="badge" style={{ color: 'var(--brand)', borderColor: 'rgba(36,132,235,.35)', background: 'rgba(36,132,235,.12)' }}>
+                          {group.severity}
+                        </span>
+                        {group.count > 1 && (
+                          <span className="badge" style={{ color: 'var(--text)', borderColor: 'var(--border)', background: 'var(--surface-alt)' }}>
+                            {group.count} grouped
+                          </span>
+                        )}
+                      </div>
+                      <span title={formatExactTime(group.lastSeen)} style={{ fontSize: '10.5px', color: 'var(--muted2)' }}>
+                        Last seen {formatRelativeTime(group.lastSeen)}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '3px' }}>
+                      {group.message}
+                    </div>
+
+                    {group.latest.record && (
+                      <div style={{ fontSize: '10.5px', color: 'var(--muted2)', marginTop: '5px', fontFamily: 'JetBrains Mono, monospace' }}>
+                        {group.latest.record.callingParty} → {group.latest.record.calledParty} · {group.latest.record.duration}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                      <button onClick={() => handleViewRelatedCalls(group)} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
+                        View related calls
+                      </button>
+                      {group.status !== 'acknowledged' && (
+                        <button onClick={() => updateStatus(group.groupKey, 'acknowledged')} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
+                          Acknowledge
+                        </button>
+                      )}
+                      {group.status !== 'resolved' && (
+                        <button onClick={() => updateStatus(group.groupKey, 'resolved')} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
+                          Resolve
+                        </button>
+                      )}
+                      {group.status !== 'open' && (
+                        <button onClick={() => updateStatus(group.groupKey, 'open')} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
+                          Reopen
+                        </button>
+                      )}
+                      <button onClick={() => muteType(group.type, snoozeMinutes)} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
+                        Mute type {snoozeMinutes}m
+                      </button>
+                      {mutedTypes[group.type] && (
+                        <button onClick={() => unmuteType(group.type)} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
+                          Unmute type
+                        </button>
                       )}
                     </div>
-                    <span title={formatExactTime(group.lastSeen)} style={{ fontSize: '10.5px', color: 'var(--muted2)' }}>
-                      Last seen {formatRelativeTime(group.lastSeen)}
-                    </span>
-                  </div>
-
-                  <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '3px' }}>
-                    {group.message}
-                  </div>
-
-                  {group.latest.record && (
-                    <div style={{ fontSize: '10.5px', color: 'var(--muted2)', marginTop: '5px', fontFamily: 'JetBrains Mono, monospace' }}>
-                      {group.latest.record.callingParty} → {group.latest.record.calledParty} · {group.latest.record.duration}
-                    </div>
-                  )}
-
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
-                    <button onClick={() => handleViewRelatedCalls(group)} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
-                      View related calls
-                    </button>
-                    {group.status !== 'acknowledged' && (
-                      <button onClick={() => updateStatus(group.groupKey, 'acknowledged')} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
-                        Acknowledge
-                      </button>
-                    )}
-                    {group.status !== 'resolved' && (
-                      <button onClick={() => updateStatus(group.groupKey, 'resolved')} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
-                        Resolve
-                      </button>
-                    )}
-                    {group.status !== 'open' && (
-                      <button onClick={() => updateStatus(group.groupKey, 'open')} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
-                        Reopen
-                      </button>
-                    )}
-                    <button onClick={() => muteType(group.type, snoozeMinutes)} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
-                      Mute type {snoozeMinutes}m
-                    </button>
-                    {mutedTypes[group.type] && (
-                      <button onClick={() => unmuteType(group.type)} className="btn bg2" style={{ fontSize: '11px', padding: '4px 10px' }}>
-                        Unmute type
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
+            );
+          })}
+
+          {sortedFiltered.length === 0 && (
+            <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
+              <div style={{ fontSize: '32px', marginBottom: '12px' }}>🎉</div>
+              <p style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: 600 }}>No alerts matched</p>
+              <p style={{ fontSize: '11px', color: 'var(--muted2)', marginTop: '4px' }}>
+                All systems normal or current filters are too restrictive
+              </p>
             </div>
-          );
-        })}
+          )}
+        </div>
 
-        {sortedFiltered.length === 0 && (
-          <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '32px', marginBottom: '12px' }}>🎉</div>
-            <p style={{ fontSize: '13px', color: 'var(--muted)', fontWeight: 600 }}>No alerts matched</p>
-            <p style={{ fontSize: '11px', color: 'var(--muted2)', marginTop: '4px' }}>
-              All systems normal or current filters are too restrictive
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="card p-3" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '11px', color: 'var(--muted2)' }}>
-          Showing {(currentPage - 1) * pageSize + (sortedFiltered.length > 0 ? 1 : 0)}-
-          {Math.min(currentPage * pageSize, sortedFiltered.length)} of {sortedFiltered.length}
-        </span>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            className="btn bg2"
-            style={{ fontSize: '11px', padding: '4px 10px' }}
-          >
-            Prev
-          </button>
-          <span style={{ fontSize: '11px', color: 'var(--muted2)', alignSelf: 'center' }}>
-            Page {currentPage} / {pageCount}
+        <div
+          className="pt-2 mt-2"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)', flexShrink: 0 }}
+        >
+          <span style={{ fontSize: '11px', color: 'var(--muted2)' }}>
+            Showing {(currentPage - 1) * pageSize + (sortedFiltered.length > 0 ? 1 : 0)}-
+            {Math.min(currentPage * pageSize, sortedFiltered.length)} of {sortedFiltered.length}
           </span>
-          <button
-            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-            disabled={currentPage >= pageCount}
-            className="btn bg2"
-            style={{ fontSize: '11px', padding: '4px 10px' }}
-          >
-            Next
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="btn bg2"
+              style={{ fontSize: '11px', padding: '4px 10px' }}
+            >
+              Prev
+            </button>
+            <span style={{ fontSize: '11px', color: 'var(--muted2)', alignSelf: 'center' }}>
+              Page {currentPage} / {pageCount}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+              disabled={currentPage >= pageCount}
+              className="btn bg2"
+              style={{ fontSize: '11px', padding: '4px 10px' }}
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>

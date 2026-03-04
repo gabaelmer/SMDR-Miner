@@ -25,7 +25,7 @@ export function DailyTrendChart({ trendData, trendCurrencies, from, to }: DailyT
   }, []);
 
   return (
-    <div className="card p-3 h-full min-h-0 flex flex-col">
+    <div className="card p-3 h-full min-h-0 overflow-hidden flex flex-col">
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
           Daily Trend
@@ -45,9 +45,9 @@ export function DailyTrendChart({ trendData, trendCurrencies, from, to }: DailyT
           Loading chart...
         </div>
       ) : (
-        <div style={{ width: '100%', flex: 1, minHeight: 180 }}>
+        <div style={{ width: '100%', flex: 1, minHeight: 220 }}>
           <recharts.ResponsiveContainer>
-            <recharts.LineChart data={trendData} margin={{ top: 6, right: 8, left: 6, bottom: 6 }}>
+            <recharts.LineChart data={trendData} margin={{ top: 8, right: 8, left: 6, bottom: 20 }}>
               <recharts.CartesianGrid stroke="rgba(95,110,136,0.2)" vertical={false} />
               <recharts.XAxis dataKey="label" stroke="var(--muted2)" tick={{ fontSize: 11 }} />
               <recharts.YAxis yAxisId="calls" stroke="var(--muted2)" tick={{ fontSize: 11 }} />

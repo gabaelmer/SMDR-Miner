@@ -51,6 +51,7 @@ curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/main/instal
 - Installs required packages automatically (`git`, `curl`, `build-essential`, `python3`, `fontconfig`, `ufw`, etc.).
 - Installs/updates Node.js 24.x automatically.
 - Clones or updates app source in `/opt/smdr-insight`.
+- On upgrade, resets to the selected git ref and removes stale release files while preserving `/opt/smdr-insight/config`.
 - Installs npm dependencies and rebuilds native modules (`better-sqlite3`).
 - Builds latest app code (`npm run build`) so all pushed frontend/backend changes are included.
 - Creates and enables `smdr-insight.service`.
