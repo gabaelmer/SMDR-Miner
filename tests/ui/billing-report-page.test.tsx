@@ -59,6 +59,7 @@ function buildReport(overrides: Partial<BillingReportData> = {}): BillingReportD
     ],
     topCostCallsTotal: 1,
     dailyTrend: [{ date: '2026-02-26', call_count: 2, total_cost: 10, currency: 'PHP' }],
+    topSpenders: [{ extension: '1001', call_count: 2, total_cost: 10, currency: 'PHP' }],
     ...overrides
   };
 }

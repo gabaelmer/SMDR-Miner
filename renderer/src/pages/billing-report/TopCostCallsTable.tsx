@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BillingReportSortBy, BillingReportSortDir, BillingReportTopCostCall } from '../../../../shared/types';
 import { CAT_COLOR } from './constants';
 import { fmtCur, fmtDur } from './utils';
@@ -18,6 +18,8 @@ interface TopCostCallsTableProps {
   onPageSizeChange: (value: number) => void;
   onPrevPage: () => void;
   onNextPage: () => void;
+  onFirstPage: () => void;
+  onLastPage: () => void;
 }
 
 function CallDetailModal({ call, onClose }: { call: BillingReportTopCostCall; onClose: () => void }) {
@@ -36,19 +38,32 @@ function CallDetailModal({ call, onClose }: { call: BillingReportTopCostCall; on
     ['Currency', call.bill_currency],
   ];
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={onClose}>
       <div
         className="w-full max-w-md rounded-2xl border p-5"
         style={{ background: 'var(--surface)', borderColor: 'var(--brand)' }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Call detail"
       >
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-bold" style={{ color: 'var(--brand)' }}>Call Detail</p>
           <button
+            type="button"
             onClick={onClose}
             className="rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold"
             style={{ background: 'var(--surface-alt)', color: 'var(--muted)' }}
+            aria-label="Close call detail"
           >✕</button>
         </div>
         <div className="space-y-2">
@@ -85,9 +100,12 @@ export function TopCostCallsTable({
   onSortDirToggle,
   onPageSizeChange,
   onPrevPage,
-  onNextPage
+  onNextPage,
+  onFirstPage,
+  onLastPage
 }: TopCostCallsTableProps) {
   const [selectedCall, setSelectedCall] = useState<BillingReportTopCostCall | null>(null);
+  const safePage = Math.min(Math.max(1, page), Math.max(1, totalPages));
 
   return (
     <div className="card overflow-hidden h-full min-h-0 flex flex-col">
@@ -96,13 +114,14 @@ export function TopCostCallsTable({
           Top Cost Calls ({topCallsTotal.toLocaleString()})
         </p>
         <div className="flex flex-wrap items-end gap-2">
-          <label className="text-xs" style={{ color: 'var(--muted2)' }}>
+          <label className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
             Sort
             <select
               value={sortBy}
               onChange={(e) => onSortByChange(e.target.value as BillingReportSortBy)}
-              className="ml-2 rounded-lg border px-2 py-1 text-xs"
-              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              className="ml-2 rounded-lg border px-2 py-0 h-8 leading-5 text-xs"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: '#eaf2ff' }}
+              aria-label="Sort top cost calls by"
             >
               <option value="cost">Cost</option>
               <option value="duration">Duration</option>
@@ -112,20 +131,23 @@ export function TopCostCallsTable({
           <div className="flex flex-col">
             <span className="text-xs select-none invisible">Direction</span>
             <button
+              type="button"
               onClick={onSortDirToggle}
-              className="h-[30px] rounded-lg border px-2 text-xs font-semibold"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+              className="h-8 rounded-lg border px-2 text-xs font-semibold"
+              style={{ borderColor: 'var(--border)', color: '#eaf2ff' }}
+              aria-label={`Sort direction ${sortDir === 'desc' ? 'descending' : 'ascending'}`}
             >
               {sortDir === 'desc' ? '↓ Desc' : '↑ Asc'}
             </button>
           </div>
-          <label className="text-xs" style={{ color: 'var(--muted2)' }}>
+          <label className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
             Rows
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="ml-2 rounded-lg border px-2 py-1 text-xs"
-              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              className="ml-2 rounded-lg border px-2 py-0 h-8 leading-5 text-xs"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: '#eaf2ff' }}
+              aria-label="Rows per page"
             >
               {[10, 20, 50, 100].map((size) => (
                 <option key={size} value={size}>
@@ -138,11 +160,15 @@ export function TopCostCallsTable({
       </div>
 
       <div className="overflow-auto min-h-0 flex-1">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm" style={{ minWidth: 760 }}>
           <thead>
             <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
               {['Date', 'From', 'Dialled', 'Category', 'Duration', 'Rate/min', 'Cost'].map((header) => (
-                <th key={header} className="text-left px-4 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                <th
+                  key={header}
+                  className={`sticky top-0 z-[1] px-4 py-2 text-xs font-semibold ${header === 'Duration' || header === 'Rate/min' || header === 'Cost' ? 'text-center' : 'text-left'}`}
+                  style={{ color: '#bfd7ff', background: 'var(--surface-alt)' }}
+                >
                   {header}
                 </th>
               ))}
@@ -152,11 +178,17 @@ export function TopCostCallsTable({
             {topCostCalls.map((call) => (
               <tr
                 key={call.id}
-                className="border-b cursor-pointer transition-colors"
+                className="billing-top-cost-row border-b cursor-pointer transition-colors"
+                tabIndex={0}
+                aria-label={`Call ${call.calling_party} to ${call.called_party}`}
                 style={{ borderColor: 'var(--border)' }}
                 onClick={() => setSelectedCall(call)}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(36,132,235,0.07)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedCall(call);
+                  }
+                }}
               >
                 <td className="px-4 py-2 text-xs" style={{ color: 'var(--muted)' }}>
                   {call.date} {call.start_time}
@@ -179,19 +211,19 @@ export function TopCostCallsTable({
                     {call.call_category}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-xs" style={{ color: 'var(--muted)' }}>
+                <td className="px-4 py-2 text-xs text-center" style={{ color: 'var(--muted)' }}>
                   {fmtDur(call.duration_seconds)}
                 </td>
-                <td className="px-4 py-2 text-xs" style={{ color: 'var(--muted)' }}>
+                <td className="px-4 py-2 text-xs text-center" style={{ color: 'var(--muted)' }}>
                   {call.rate_per_minute > 0 ? fmtCur(call.rate_per_minute, call.bill_currency) : '—'}
                 </td>
-                <td className="px-4 py-2 font-bold text-brand-400">{fmtCur(call.call_cost, call.bill_currency)}</td>
+                <td className="px-4 py-2 font-bold text-brand-400 text-center">{fmtCur(call.call_cost, call.bill_currency)}</td>
               </tr>
             ))}
             {!topCostCalls.length && (
               <tr>
                 <td colSpan={7} className="px-4 py-6 text-center text-xs" style={{ color: 'var(--muted)' }}>
-                  No calls found
+                  No calls found for the applied filters. Try widening the date range or clearing extension/category.
                 </td>
               </tr>
             )}
@@ -201,24 +233,48 @@ export function TopCostCallsTable({
 
       <div className="px-3 py-2 border-t flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border)' }}>
         <p className="text-xs" style={{ color: 'var(--muted2)' }}>
-          Page {Math.min(page, totalPages)} of {totalPages}
+          Page {safePage} of {totalPages}
         </p>
         <div className="flex gap-2">
           <button
-            onClick={onPrevPage}
-            disabled={page <= 1 || loading || isRefreshing}
+            type="button"
+            onClick={onFirstPage}
+            disabled={safePage <= 1 || loading || isRefreshing}
             className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
             style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+            aria-label="Go to first page"
+          >
+            « First
+          </button>
+          <button
+            type="button"
+            onClick={onPrevPage}
+            disabled={safePage <= 1 || loading || isRefreshing}
+            className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+            aria-label="Go to previous page"
           >
             ← Previous
           </button>
           <button
+            type="button"
             onClick={onNextPage}
-            disabled={page >= totalPages || loading || isRefreshing}
+            disabled={safePage >= totalPages || loading || isRefreshing}
             className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
             style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+            aria-label="Go to next page"
           >
             Next →
+          </button>
+          <button
+            type="button"
+            onClick={onLastPage}
+            disabled={safePage >= totalPages || loading || isRefreshing}
+            className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+            aria-label="Go to last page"
+          >
+            Last »
           </button>
         </div>
       </div>

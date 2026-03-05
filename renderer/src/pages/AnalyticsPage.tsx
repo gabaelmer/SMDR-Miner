@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AnalyticsSnapshot, RecordFilters } from '../../../shared/types';
 import { Heatmap } from '../components/Heatmap';
@@ -64,6 +62,7 @@ export function AnalyticsPage() {
   const [compareLabel, setCompareLabel] = useState('');
   const [loadingCurrent, setLoadingCurrent] = useState(false);
   const [loadingCompare, setLoadingCompare] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [selectedTransferSlice, setSelectedTransferSlice] = useState<{ label: string; count: number } | null>(null);
   const transferDonutRef = useRef<HTMLDivElement>(null);
   const [transferDonutSize, setTransferDonutSize] = useState({ width: 0, height: 0 });
@@ -248,26 +247,38 @@ export function AnalyticsPage() {
 
   const exportImage = async () => {
     if (!rootRef.current) return;
-    const canvas = await html2canvas(rootRef.current, { backgroundColor: '#050b1a', scale: 2 });
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      download(`analytics-${startDate}-to-${endDate}.png`, blob, 'image/png');
-    });
+    setExporting(true);
+    try {
+      const [{ default: html2canvas }] = await Promise.all([import('html2canvas')]);
+      const canvas = await html2canvas(rootRef.current, { backgroundColor: '#050b1a', scale: 2 });
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        download(`analytics-${startDate}-to-${endDate}.png`, blob, 'image/png');
+      });
+    } finally {
+      setExporting(false);
+    }
   };
 
   const exportPdf = async () => {
     if (!rootRef.current) return;
-    const canvas = await html2canvas(rootRef.current, { backgroundColor: '#050b1a', scale: 2 });
-    const img = canvas.toDataURL('image/png');
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    doc.addImage(img, 'PNG', 8, 8, pageWidth - 16, pageHeight - 16);
-    doc.save(`analytics-${startDate}-to-${endDate}.pdf`);
+    setExporting(true);
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
+      const canvas = await html2canvas(rootRef.current, { backgroundColor: '#050b1a', scale: 2 });
+      const img = canvas.toDataURL('image/png');
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      doc.addImage(img, 'PNG', 8, 8, pageWidth - 16, pageHeight - 16);
+      doc.save(`analytics-${startDate}-to-${endDate}.pdf`);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
-    <div ref={rootRef} className="h-[calc(100vh-148px)] min-h-0 overflow-auto xl:overflow-hidden flex flex-col gap-1.5">
+    <div ref={rootRef} className="app-page gap-1.5">
       <div className="card p-3 shrink-0">
         <div className="grid gap-2 md:grid-cols-12" style={{ alignItems: 'end' }}>
           <div className="md:col-span-2">
@@ -310,11 +321,26 @@ export function AnalyticsPage() {
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
             />
           </div>
-          <div className="md:col-span-1" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '20px' }}>
-            <input type="checkbox" checked={compareEnabled} onChange={(e) => setCompareEnabled(e.target.checked)} />
-            <span style={{ fontSize: '11px', color: 'var(--text)', fontWeight: 600 }}>Compare</span>
-          </div>
           <div className="md:col-span-2">
+            <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Compare</p>
+            <div
+              className="rounded-2xl border px-3 py-2 w-full flex items-center justify-between"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+            >
+              <span style={{ fontSize: '11px', color: 'var(--text)', fontWeight: 600 }}>Compare</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={compareEnabled}
+                aria-label="Toggle compare mode"
+                onClick={() => setCompareEnabled((prev) => !prev)}
+                className={`inline-flex h-7 w-14 items-center rounded-full transition ${compareEnabled ? 'bg-brand-600' : 'bg-gray-600'}`}
+              >
+                <span className={`inline-block h-6 w-6 rounded-full bg-white transition-transform ${compareEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
+              </button>
+            </div>
+          </div>
+          <div className="md:col-span-1">
             <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Comparison Range</p>
             <p style={{ fontSize: '12px', color: 'var(--muted2)' }}>
               {compareEnabled ? (loadingCompare ? 'Loading comparison…' : compareLabel || 'No baseline') : 'Comparison disabled'}
@@ -324,11 +350,11 @@ export function AnalyticsPage() {
             <button onClick={exportCsv} className="btn bg2" style={{ fontSize: '11px', flex: '0 1 120px', minWidth: '120px' }}>
               Export CSV
             </button>
-            <button onClick={() => void exportImage()} className="btn bg2" style={{ fontSize: '11px', flex: '0 1 120px', minWidth: '120px' }}>
-              Export PNG
+            <button disabled={exporting} onClick={() => void exportImage()} className="btn bg2" style={{ fontSize: '11px', flex: '0 1 120px', minWidth: '120px' }}>
+              {exporting ? 'Exporting…' : 'Export PNG'}
             </button>
-            <button onClick={() => void exportPdf()} className="btn bg2" style={{ fontSize: '11px', flex: '0 1 120px', minWidth: '120px' }}>
-              Export PDF
+            <button disabled={exporting} onClick={() => void exportPdf()} className="btn bg2" style={{ fontSize: '11px', flex: '0 1 120px', minWidth: '120px' }}>
+              {exporting ? 'Exporting…' : 'Export PDF'}
             </button>
           </div>
         </div>

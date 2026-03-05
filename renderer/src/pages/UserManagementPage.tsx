@@ -368,7 +368,7 @@ export function UserManagementPage() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-3 md:space-y-4 animate-in fade-in duration-500">
       {/* Screen Reader Announcements */}
       <div
         role="status"
@@ -402,46 +402,37 @@ export function UserManagementPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1">
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`rounded-2xl px-4 py-2 text-sm font-semibold capitalize transition ${
-            activeTab === 'users' ? 'bg-brand-600 text-white' : 'card border'
-          }`}
-          style={activeTab === 'users' ? undefined : { borderColor: 'var(--border)', color: 'var(--text)' }}
-        >
-          Users
-        </button>
-        <button
-          onClick={() => setActiveTab('activity')}
-          className={`rounded-2xl px-4 py-2 text-sm font-semibold capitalize transition ${
-            activeTab === 'activity' ? 'bg-brand-600 text-white' : 'card border'
-          }`}
-          style={activeTab === 'activity' ? undefined : { borderColor: 'var(--border)', color: 'var(--text)' }}
-        >
-          Activity Dashboard
-        </button>
-      </div>
-
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="grid gap-2 md:grid-cols-[1fr_auto] md:items-start">
         <div>
           <h1 className="text-2xl font-black tracking-tight" style={{ color: 'var(--text)' }}>User Management</h1>
           <p className="text-sm opacity-60 mt-1" style={{ color: 'var(--text)' }}>Manage system access, roles, and security audit logs.</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="rounded-2xl bg-brand-600 hover:bg-brand-500 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-900/20 transition-all transform active:scale-95 flex items-center justify-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" x2="19" y1="8" y2="14" /><line x1="22" x2="16" y1="11" y2="11" /></svg>
-          Create New User
-        </button>
+        <div className="flex gap-1 md:justify-self-end">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`rounded-2xl px-4 py-1.5 text-sm font-semibold capitalize transition ${
+              activeTab === 'users' ? 'bg-brand-600 text-white' : 'card border'
+            }`}
+            style={activeTab === 'users' ? undefined : { borderColor: 'var(--border)', color: 'var(--text)' }}
+          >
+            Users
+          </button>
+          <button
+            onClick={() => setActiveTab('activity')}
+            className={`rounded-2xl px-4 py-1.5 text-sm font-semibold capitalize transition ${
+              activeTab === 'activity' ? 'bg-brand-600 text-white' : 'card border'
+            }`}
+            style={activeTab === 'activity' ? undefined : { borderColor: 'var(--border)', color: 'var(--text)' }}
+          >
+            Activity Dashboard
+          </button>
+        </div>
       </div>
 
       {/* Advanced Filters Panel */}
-      <div className="card p-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="card p-3">
+        <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-bold" style={{ color: 'var(--text)' }}>Advanced Filters</h3>
           <button
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
@@ -453,7 +444,7 @@ export function UserManagementPage() {
         </div>
         
         {showAdvancedFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Status Filter */}
             <div>
               <label className="text-xs font-semibold mb-1 block" style={{ color: 'var(--text)' }}>Account Status</label>
@@ -537,10 +528,10 @@ export function UserManagementPage() {
 
       {/* Tab Content */}
       {activeTab === 'users' && (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* User Statistics Cards */}
         <div className="lg:col-span-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
             <StatCard label="Total Users" value={totalUsers} color="brand" icon={
               <svg viewBox="0 0 16 16" fill="currentColor" className="w-6 h-6"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 1c-2 0-6 1-6 3v1h12v-1c0-2-4-3-6-3z"/></svg>
             } />
@@ -557,7 +548,7 @@ export function UserManagementPage() {
         </div>
 
         {/* Main Users Table */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-2">
           <UserTable
             users={users}
             loading={loading}
@@ -589,6 +580,7 @@ export function UserManagementPage() {
             onViewDetails={openUserDetails}
             onDelete={(username) => setUserPendingDelete(username)}
             onChangePassword={openPasswordModal}
+            onCreateUser={() => setShowCreateModal(true)}
           />
         </div>
 

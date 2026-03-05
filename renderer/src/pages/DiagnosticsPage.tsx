@@ -151,6 +151,7 @@ export function DiagnosticsPage() {
   const [eventTypeFilter, setEventTypeFilter] = useState<ServiceEventType>('all');
   const [eventSeverityFilter, setEventSeverityFilter] = useState<ServiceEventSeverity>('all');
   const [eventSearchTerm, setEventSearchTerm] = useState('');
+  const [parseErrorReasonFilter, setParseErrorReasonFilter] = useState<string>('all');
   const [eventLogScrollTop, setEventLogScrollTop] = useState(0);
   const [eventLogViewportHeight, setEventLogViewportHeight] = useState(DEFAULT_EVENT_LOG_VIEWPORT_HEIGHT);
   const [copyingSnapshot, setCopyingSnapshot] = useState(false);
@@ -166,6 +167,32 @@ export function DiagnosticsPage() {
   const memoryCap = Math.max(50, maxInMemoryRecords || 0);
   const memoryUsagePct = memoryCap > 0 ? Math.round((recentRecordsCount / memoryCap) * 100) : 0;
   const connectionPages = Math.max(1, Math.ceil((connectionEvents.total || 0) / Math.max(1, connectionPageSize)));
+  const quickDateRangeOptions = useMemo(() => ([
+    { label: 'Today', days: 1 },
+    { label: 'Last 3 days', days: 3 },
+    { label: 'Last 7 days', days: 7 }
+  ]), []);
+
+  const activeQuickDateRange = useMemo(() => {
+    if (!connectionStartDate || !connectionEndDate) return null;
+    for (const option of quickDateRangeOptions) {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(end.getDate() - Math.max(option.days - 1, 0));
+      if (connectionStartDate === toLocalDateInput(start) && connectionEndDate === toLocalDateInput(end)) {
+        return option.days;
+      }
+    }
+    return null;
+  }, [connectionEndDate, connectionStartDate, quickDateRangeOptions]);
+
+  const activeQuickDateRangeLabel = useMemo(() => {
+    if (activeQuickDateRange === null) {
+      if (!connectionStartDate && !connectionEndDate) return 'Custom: all dates';
+      return `Custom: ${connectionStartDate || 'start'} to ${connectionEndDate || 'end'}`;
+    }
+    return quickDateRangeOptions.find((option) => option.days === activeQuickDateRange)?.label ?? 'Custom';
+  }, [activeQuickDateRange, connectionEndDate, connectionStartDate, quickDateRangeOptions]);
 
   const parseErrorReasonBreakdown = useMemo(() => {
     const bucket = new Map<string, number>();
@@ -176,6 +203,11 @@ export function DiagnosticsPage() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
   }, [parseErrors]);
+
+  const filteredParseErrors = useMemo(() => {
+    if (parseErrorReasonFilter === 'all') return parseErrors;
+    return parseErrors.filter((error) => error.reason === parseErrorReasonFilter);
+  }, [parseErrors, parseErrorReasonFilter]);
 
   const filteredServiceEvents = useMemo(() => {
     const normalizedSearch = eventSearchTerm.trim().toLowerCase();
@@ -560,7 +592,7 @@ export function DiagnosticsPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-148px)] min-h-0 overflow-hidden flex flex-col gap-1.5">
+    <div className="app-page gap-1.5">
       <div className="fixed right-4 top-4 z-40 space-y-2">
         {actionToasts.map((toast) => {
           const styles = getToastStyles(toast.kind);
@@ -703,32 +735,47 @@ export function DiagnosticsPage() {
       </div>
       </div>
 
-      <div className="grid gap-1.5 lg:grid-cols-2 lg:grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)] min-h-0 flex-1">
-        <div className="card p-2.5 order-1 min-h-0 overflow-auto lg:col-start-1 lg:row-start-1">
+      <div className="grid gap-1.5 min-h-0 flex-1 lg:grid-cols-3 lg:grid-rows-[auto_minmax(0,1fr)]">
+        <div className="card p-2.5 order-1 min-h-0 overflow-auto lg:col-span-3">
           <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text)' }}>Diagnostics Actions</h2>
           <div className="space-y-1.5">
             <div className="grid gap-2 sm:grid-cols-3">
-              <button
-                onClick={handleRefreshDashboard}
-                disabled={refreshingDashboard}
-                className="w-full rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {refreshingDashboard ? 'Refreshing...' : 'Refresh Dashboard'}
-              </button>
-              <button
-                onClick={handleRefreshRecords}
-                disabled={refreshingRecords}
-                className="w-full rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {refreshingRecords ? 'Refreshing...' : 'Refresh Call Logs'}
-              </button>
-              <button
-                onClick={handleRefreshParseErrors}
-                disabled={refreshingParseErrors}
-                className="w-full rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {refreshingParseErrors ? 'Refreshing...' : 'Refresh Parse Errors'}
-              </button>
+              <div className="min-w-0">
+                <button
+                  onClick={handleRefreshDashboard}
+                  disabled={refreshingDashboard}
+                  className="w-full rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {refreshingDashboard ? 'Refreshing...' : 'Refresh Dashboard'}
+                </button>
+                <p className="mt-1 text-xs" style={{ color: 'var(--muted)' }}>
+                  Dashboard refreshed: {formatTimestamp(lastDashboardRefreshAt ?? undefined)}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <button
+                  onClick={handleRefreshRecords}
+                  disabled={refreshingRecords}
+                  className="w-full rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {refreshingRecords ? 'Refreshing...' : 'Refresh Call Logs'}
+                </button>
+                <p className="mt-1 text-xs" style={{ color: 'var(--muted)' }}>
+                  Call logs refreshed: {formatTimestamp(lastRecordsRefreshAt ?? undefined)}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <button
+                  onClick={handleRefreshParseErrors}
+                  disabled={refreshingParseErrors}
+                  className="w-full rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {refreshingParseErrors ? 'Refreshing...' : 'Refresh Parse Errors'}
+                </button>
+                <p className="mt-1 text-xs" style={{ color: 'var(--muted)' }}>
+                  Parse errors refreshed: {formatTimestamp(lastParseErrorsRefreshAt ?? undefined)}
+                </p>
+              </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <button
@@ -767,10 +814,7 @@ export function DiagnosticsPage() {
               )}
             </div>
           </div>
-          <div className="grid gap-1 mt-2 text-xs" style={{ color: 'var(--muted)' }}>
-            <p>Dashboard refreshed: {formatTimestamp(lastDashboardRefreshAt ?? undefined)}</p>
-            <p>Call logs refreshed: {formatTimestamp(lastRecordsRefreshAt ?? undefined)}</p>
-            <p>Parse errors refreshed: {formatTimestamp(lastParseErrorsRefreshAt ?? undefined)}</p>
+          <div className="mt-2 text-xs" style={{ color: 'var(--muted)' }}>
             <p>Connection events refreshed: {formatTimestamp(lastConnectionEventsRefreshAt ?? undefined)}</p>
           </div>
           {!isAdmin && authChecked && (
@@ -780,7 +824,7 @@ export function DiagnosticsPage() {
           )}
         </div>
 
-        <div className="card p-2.5 order-4 min-h-0 overflow-hidden flex flex-col lg:order-2 lg:col-start-2 lg:row-start-1">
+        <div className="card p-2.5 order-3 min-h-0 overflow-hidden flex flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <h2 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>Real-time Event Log</h2>
             <div className="flex flex-wrap items-center gap-2">
@@ -892,10 +936,10 @@ export function DiagnosticsPage() {
             )}
           </div>
         </div>
-        <div className="card p-2.5 order-2 min-h-0 overflow-hidden flex flex-col lg:order-4 lg:col-start-2 lg:row-start-2 lg:row-span-2">
+        <div className="card p-2.5 order-4 min-h-0 overflow-hidden flex flex-col">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <h2 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
-              Recent Parse Errors ({parseErrors.length})
+              Recent Parse Errors ({filteredParseErrors.length}{parseErrorReasonFilter !== 'all' ? ` / ${parseErrors.length}` : ''})
             </h2>
             <button
               onClick={handleRefreshParseErrors}
@@ -909,17 +953,40 @@ export function DiagnosticsPage() {
 
           {parseErrorReasonBreakdown.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setParseErrorReasonFilter('all')}
+                className="rounded-full border px-2 py-1 text-[11px] transition-colors"
+                style={{
+                  borderColor: parseErrorReasonFilter === 'all' ? 'rgba(56, 189, 248, 0.7)' : 'var(--border)',
+                  color: parseErrorReasonFilter === 'all' ? '#dbeafe' : 'var(--muted)',
+                  background: parseErrorReasonFilter === 'all' ? 'rgba(36, 132, 235, 0.22)' : 'transparent'
+                }}
+              >
+                All: {parseErrors.length}
+              </button>
               {parseErrorReasonBreakdown.map(([reason, count]) => (
-                <span key={reason} className="rounded-full border px-2 py-1 text-[11px]" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>
+                <button
+                  key={reason}
+                  type="button"
+                  onClick={() => setParseErrorReasonFilter((prev) => (prev === reason ? 'all' : reason))}
+                  className="rounded-full border px-2 py-1 text-[11px] transition-colors"
+                  style={{
+                    borderColor: parseErrorReasonFilter === reason ? 'rgba(239, 68, 68, 0.7)' : 'var(--border)',
+                    color: parseErrorReasonFilter === reason ? '#fecaca' : 'var(--muted)',
+                    background: parseErrorReasonFilter === reason ? 'rgba(127, 29, 29, 0.35)' : 'transparent'
+                  }}
+                  title={parseErrorReasonFilter === reason ? 'Click to clear filter' : `Filter by ${reason}`}
+                >
                   {reason}: {count}
-                </span>
+                </button>
               ))}
             </div>
           )}
 
-          {parseErrors.length > 0 ? (
+          {filteredParseErrors.length > 0 ? (
             <div className="flex-1 min-h-0 space-y-2 overflow-auto pr-1">
-              {parseErrors.map((error, index) => (
+              {filteredParseErrors.map((error, index) => (
                 <div key={`${error.createdAt ?? index}-${index}`} className="p-3 rounded-xl bg-red-900/20 border border-red-800">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -942,11 +1009,15 @@ export function DiagnosticsPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm" style={{ color: 'var(--muted)' }}>No parse errors recorded.</p>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>
+              {parseErrorReasonFilter === 'all'
+                ? 'No parse errors recorded.'
+                : `No parse errors found for "${parseErrorReasonFilter}".`}
+            </p>
           )}
         </div>
 
-        <div className="card p-2.5 order-3 min-h-0 overflow-hidden flex flex-col lg:order-3 lg:col-start-1 lg:row-start-2 lg:row-span-2">
+        <div className="card p-2.5 order-2 min-h-0 overflow-hidden flex flex-col">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <div>
             <h2 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>Connection Events History</h2>
@@ -973,27 +1044,27 @@ export function DiagnosticsPage() {
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <button
-                className="rounded-lg border px-2 py-1 text-[11px]"
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                onClick={() => applyQuickDateRange(1)}
-              >
-                Today
-              </button>
-              <button
-                className="rounded-lg border px-2 py-1 text-[11px]"
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                onClick={() => applyQuickDateRange(3)}
-              >
-                Last 3 days
-              </button>
-              <button
-                className="rounded-lg border px-2 py-1 text-[11px]"
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                onClick={() => applyQuickDateRange(7)}
-              >
-                Last 7 days
-              </button>
+              {quickDateRangeOptions.map((option) => {
+                const isActive = activeQuickDateRange === option.days;
+                return (
+                  <button
+                    key={option.days}
+                    className="rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors"
+                    style={{
+                      borderColor: isActive ? 'rgba(56, 189, 248, 0.7)' : 'var(--border)',
+                      color: isActive ? '#dbeafe' : 'var(--text)',
+                      background: isActive ? 'rgba(36, 132, 235, 0.24)' : 'transparent'
+                    }}
+                    aria-pressed={isActive}
+                    onClick={() => applyQuickDateRange(option.days)}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+              <span className="text-[11px] font-semibold" style={{ color: 'var(--muted)' }}>
+                Applied: {activeQuickDateRangeLabel}
+              </span>
             </div>
 
             <div className="grid gap-2 md:grid-cols-5 mb-2">

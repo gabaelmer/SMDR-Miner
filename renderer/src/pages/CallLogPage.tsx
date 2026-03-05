@@ -200,15 +200,15 @@ export function CallLogPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-148px)] min-h-0 overflow-hidden flex flex-col gap-1.5">
-      <div className="card p-3 shrink-0 max-h-[34vh] overflow-auto">
-        <div className="grid gap-2 md:grid-cols-12">
+    <div className="app-page gap-1.5">
+      <div className="card p-3 shrink-0 max-h-[36vh] xl:max-h-[34vh] overflow-auto">
+        <div className="grid gap-2.5 md:grid-cols-12">
           <div className="md:col-span-2">
             <label className="text-xs" style={{ color: 'var(--text)', display: 'block', marginBottom: '4px' }}>From:</label>
             <input
               value={filters.dateFrom ?? ''}
               type="date"
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ dateFrom: e.target.value })}
             />
@@ -218,7 +218,7 @@ export function CallLogPage() {
             <input
               value={filters.dateTo ?? ''}
               type="date"
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ dateTo: e.target.value })}
             />
@@ -228,7 +228,7 @@ export function CallLogPage() {
             <input
               value={filters.extension ?? ''}
               placeholder="e.g. 1001"
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ extension: e.target.value })}
             />
@@ -238,16 +238,16 @@ export function CallLogPage() {
             <input
               value={filters.accountCode ?? ''}
               placeholder="e.g. ACC-001"
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ accountCode: e.target.value })}
             />
           </div>
-          <div className="md:col-span-1">
+          <div className="md:col-span-1 max-w-[170px]">
             <label className="text-xs" style={{ color: 'var(--text)', display: 'block', marginBottom: '4px' }}>Call Type:</label>
             <select
               value={filters.callType ?? ''}
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ callType: (e.target.value || undefined) as 'internal' | 'external' | undefined })}
             >
@@ -256,11 +256,11 @@ export function CallLogPage() {
               <option value="external">External</option>
             </select>
           </div>
-          <div className="md:col-span-1">
+          <div className="md:col-span-1 max-w-[160px]">
             <label className="text-xs" style={{ color: 'var(--text)', display: 'block', marginBottom: '4px' }}>Status:</label>
             <select
               value={filters.completionStatus ?? ''}
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ completionStatus: e.target.value || undefined })}
             >
@@ -280,7 +280,7 @@ export function CallLogPage() {
             <button
               onClick={handleApplyFilters}
               disabled={recordsLoading}
-              className="rounded-2xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white w-full"
+              className="rounded-2xl bg-brand-600 px-3 h-10 text-sm font-semibold text-white w-full"
             >
               {recordsLoading ? 'Applying...' : 'Apply'}
             </button>
@@ -288,7 +288,7 @@ export function CallLogPage() {
           <div className="md:col-span-1 flex items-end">
             <button
               onClick={clearFilters}
-              className="rounded-2xl border px-3 py-2 text-sm font-semibold w-full"
+              className="rounded-2xl border px-3 h-10 text-sm font-semibold w-full"
               style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
             >
               Clear
@@ -296,13 +296,13 @@ export function CallLogPage() {
           </div>
         </div>
 
-        <div className="mt-2 grid gap-2 md:grid-cols-12">
+        <div className="mt-2 grid gap-2.5 md:grid-cols-12">
           <div className="md:col-span-1">
             <label className="text-xs" style={{ color: 'var(--text)', display: 'block', marginBottom: '4px' }}>Hour:</label>
             <input
               value={filters.hour ?? ''}
               placeholder="00-23"
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ hour: e.target.value })}
             />
@@ -311,7 +311,7 @@ export function CallLogPage() {
             <label className="text-xs" style={{ color: 'var(--text)', display: 'block', marginBottom: '4px' }}>Transfer/Conference:</label>
             <select
               value={filters.transferFlag ?? ''}
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ transferFlag: e.target.value || undefined })}
             >
@@ -327,7 +327,7 @@ export function CallLogPage() {
             <input
               value={filters.callIdentifier ?? ''}
               placeholder="Call Identifier"
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ callIdentifier: e.target.value || undefined })}
             />
@@ -337,7 +337,7 @@ export function CallLogPage() {
             <input
               value={filters.associatedCallIdentifier ?? ''}
               placeholder="Associated Call Identifier"
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ associatedCallIdentifier: e.target.value || undefined })}
             />
@@ -347,7 +347,7 @@ export function CallLogPage() {
             <input
               value={filters.networkOLI ?? ''}
               placeholder="Network OLI"
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="rounded-2xl border px-3 h-10 w-full"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(e) => setFilters({ networkOLI: e.target.value || undefined })}
             />
@@ -475,7 +475,7 @@ export function CallLogPage() {
               ref={fileInputRef}
               type="file"
               accept=".txt,text/plain"
-              className="rounded-xl border px-2 py-1.5 text-xs"
+              className="import-file-input rounded-xl border px-2 py-1.5 text-xs"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;

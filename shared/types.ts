@@ -535,12 +535,20 @@ export interface BillingReportDailyTrendRow {
   currency: string;
 }
 
+export interface BillingReportTopSpender {
+  extension: string;
+  call_count: number;
+  total_cost: number;
+  currency: string;
+}
+
 export interface BillingReportData {
   summary: BillingReportSummaryRow[];
   topCostCalls: BillingReportTopCostCall[];
   topCostCallsTotal: number;
   topCostCallsTruncated?: boolean;
   dailyTrend: BillingReportDailyTrendRow[];
+  topSpenders: BillingReportTopSpender[];
 }
 
 export const DEFAULT_BILLING_CONFIG: BillingConfig = {

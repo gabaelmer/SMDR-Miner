@@ -109,6 +109,7 @@ function createMockService(db: Database.Database, mockState: MockState): Record<
     getBillingReport: () => ({
       summary: [],
       dailyTrend: [],
+      topSpenders: [],
       topCostCalls: [],
       totals: { calls: 0, durationSeconds: 0, cost: 0, tax: 0, currency: 'PHP' },
       pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },

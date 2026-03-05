@@ -435,7 +435,7 @@ export function AlertsPage() {
   };
 
   return (
-    <div className="gap h-[calc(100vh-148px)] min-h-0 overflow-hidden flex flex-col">
+    <div className="app-page gap">
       <div className="grid gap-3 md:grid-cols-4 shrink-0">
         <div className="card p-3">
           <p className="text-xs" style={{ color: 'var(--muted2)' }}>Total Alerts</p>
@@ -456,24 +456,24 @@ export function AlertsPage() {
         </div>
       </div>
 
-      <div className="card shrink-0" style={{ padding: '12px 15px' }}>
-        <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr auto auto', alignItems: 'end' }}>
-          <div>
-            <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Search</p>
+      <div className="card shrink-0 p-2.5">
+        <div className="grid gap-1.5 items-end sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9">
+          <div className="xl:col-span-2">
+            <p className="text-[11px] mb-0.5" style={{ color: 'var(--muted)' }}>Search</p>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Message, extension, or number"
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="h-9 rounded-2xl border px-3 py-0 w-full text-sm"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
             />
           </div>
           <div>
-            <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Type</p>
+            <p className="text-[11px] mb-0.5" style={{ color: 'var(--muted)' }}>Type</p>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="h-9 rounded-2xl border px-3 py-0 w-full text-sm"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
             >
               <option value="all">All types</option>
@@ -483,11 +483,11 @@ export function AlertsPage() {
             </select>
           </div>
           <div>
-            <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Severity</p>
+            <p className="text-[11px] mb-0.5" style={{ color: 'var(--muted)' }}>Severity</p>
             <select
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value as 'all' | AlertSeverity)}
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="h-9 rounded-2xl border px-3 py-0 w-full text-sm"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
             >
               <option value="all">All severities</option>
@@ -497,11 +497,11 @@ export function AlertsPage() {
             </select>
           </div>
           <div>
-            <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Status</p>
+            <p className="text-[11px] mb-0.5" style={{ color: 'var(--muted)' }}>Status</p>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'all' | AlertStatus)}
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="h-9 rounded-2xl border px-3 py-0 w-full text-sm"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
             >
               <option value="all">All statuses</option>
@@ -511,70 +511,80 @@ export function AlertsPage() {
             </select>
           </div>
           <div>
-            <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>From</p>
+            <p className="text-[11px] mb-0.5" style={{ color: 'var(--muted)' }}>From</p>
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="h-9 rounded-2xl border px-3 py-0 w-full text-sm"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
             />
           </div>
           <div>
-            <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>To</p>
+            <p className="text-[11px] mb-0.5" style={{ color: 'var(--muted)' }}>To</p>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-2xl border px-3 py-2 w-full"
+              className="h-9 rounded-2xl border px-3 py-0 w-full text-sm"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
             />
           </div>
-          <button onClick={exportVisibleAsCsv} className="btn bg2" style={{ fontSize: '11.5px', padding: '8px 12px' }}>
-            Export CSV
-          </button>
-          <button onClick={exportVisibleAsJson} className="btn bg2" style={{ fontSize: '11.5px', padding: '8px 12px' }}>
-            Export JSON
-          </button>
+          <div className="xl:col-span-2 flex items-end justify-end gap-2 flex-nowrap">
+            <button onClick={exportVisibleAsCsv} className="btn bg2 h-9 px-3 text-[11px] font-semibold whitespace-nowrap min-w-[104px]">
+              Export CSV
+            </button>
+            <button onClick={exportVisibleAsJson} className="btn bg2 h-9 px-3 text-[11px] font-semibold whitespace-nowrap min-w-[104px]">
+              Export JSON
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '10px' }}>
-          <button onClick={() => refreshAlerts()} className="btn bg2" style={{ fontSize: '11.5px', padding: '5px 12px' }}>
+        <div className="mt-1.5 flex flex-wrap gap-1.5 items-end">
+          <button onClick={() => refreshAlerts()} className="btn bg2 h-9 px-3 text-[11px] font-semibold">
             ⟳ Refresh
           </button>
-          <select
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value as SortMode)}
-            className="rounded-2xl border px-3 py-2"
-            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)', fontSize: '11.5px' }}
-          >
-            <option value="newest">Sort: Newest</option>
-            <option value="oldest">Sort: Oldest</option>
-            <option value="severity">Sort: Severity</option>
-            <option value="frequency">Sort: Frequency</option>
-          </select>
-          <select
-            value={pageSize}
-            onChange={(e) => setPageSize(Number(e.target.value))}
-            className="rounded-2xl border px-3 py-2"
-            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)', fontSize: '11.5px' }}
-          >
-            <option value={10}>10 / page</option>
-            <option value={20}>20 / page</option>
-            <option value={50}>50 / page</option>
-          </select>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <p className="text-xs" style={{ color: 'var(--muted2)' }}>Snooze type</p>
+          <label className="text-[11px]" style={{ color: 'var(--muted2)' }}>
+            Sort
             <select
-              value={snoozeMinutes}
-              onChange={(e) => setSnoozeMinutes(Number(e.target.value))}
-              className="rounded-2xl border px-3 py-2"
-              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)', fontSize: '11.5px' }}
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+              className="mt-0.5 h-9 rounded-2xl border px-3 py-0 text-sm min-w-[170px]"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
             >
-              <option value={15}>15m</option>
-              <option value={60}>1h</option>
-              <option value={240}>4h</option>
-              <option value={1440}>24h</option>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="severity">Severity</option>
+              <option value="frequency">Frequency</option>
             </select>
+          </label>
+          <label className="text-[11px]" style={{ color: 'var(--muted2)' }}>
+            Rows
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="mt-0.5 h-9 rounded-2xl border px-3 py-0 text-sm min-w-[120px]"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+            >
+              <option value={10}>10 / page</option>
+              <option value={20}>20 / page</option>
+              <option value={50}>50 / page</option>
+            </select>
+          </label>
+          <div className="ml-auto">
+            <label className="text-[11px]" style={{ color: 'var(--muted2)' }}>
+              Snooze type
+              <select
+                value={snoozeMinutes}
+                onChange={(e) => setSnoozeMinutes(Number(e.target.value))}
+                className="mt-0.5 h-9 rounded-2xl border px-3 py-0 text-sm min-w-[120px]"
+                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              >
+                <option value={15}>15m</option>
+                <option value={60}>1h</option>
+                <option value={240}>4h</option>
+                <option value={1440}>24h</option>
+              </select>
+            </label>
           </div>
         </div>
       </div>

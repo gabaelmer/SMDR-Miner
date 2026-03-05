@@ -3,6 +3,12 @@ import { TREND_COLORS } from './constants';
 import { fmtCur } from './utils';
 
 type RechartsModule = typeof import('recharts');
+let rechartsLoader: Promise<RechartsModule> | null = null;
+
+function loadRecharts(): Promise<RechartsModule> {
+  if (!rechartsLoader) rechartsLoader = import('recharts');
+  return rechartsLoader;
+}
 
 interface DailyTrendChartProps {
   trendData: Array<Record<string, string | number>>;
@@ -16,7 +22,7 @@ export function DailyTrendChart({ trendData, trendCurrencies, from, to }: DailyT
 
   useEffect(() => {
     let active = true;
-    void import('recharts').then((mod) => {
+    void loadRecharts().then((mod) => {
       if (active) setRecharts(mod);
     });
     return () => {
@@ -50,8 +56,8 @@ export function DailyTrendChart({ trendData, trendCurrencies, from, to }: DailyT
             <recharts.LineChart data={trendData} margin={{ top: 8, right: 8, left: 6, bottom: 20 }}>
               <recharts.CartesianGrid stroke="rgba(95,110,136,0.2)" vertical={false} />
               <recharts.XAxis dataKey="label" stroke="var(--muted2)" tick={{ fontSize: 11 }} />
-              <recharts.YAxis yAxisId="calls" stroke="var(--muted2)" tick={{ fontSize: 11 }} />
-              <recharts.YAxis yAxisId="cost" orientation="right" stroke="var(--muted2)" tick={{ fontSize: 11 }} />
+              <recharts.YAxis yAxisId="calls" stroke="var(--muted2)" tick={{ fontSize: 11 }} label={{ value: 'Calls', angle: -90, position: 'insideLeft', style: { fill: 'var(--muted2)', fontSize: 10 } }} />
+              <recharts.YAxis yAxisId="cost" orientation="right" stroke="var(--muted2)" tick={{ fontSize: 11 }} label={{ value: 'Cost', angle: 90, position: 'insideRight', style: { fill: 'var(--muted2)', fontSize: 10 } }} />
               <recharts.Tooltip
                 contentStyle={{
                   borderRadius: 10,

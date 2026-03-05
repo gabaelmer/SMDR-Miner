@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { BillingConfig, CallBilling, CallCategory, DEFAULT_BILLING_CONFIG, PrefixRule, RateConfig, RateTier } from '../../../shared/types';
 import { api } from '../lib/api';
@@ -6,6 +6,8 @@ import { api } from '../lib/api';
 const CATEGORIES: CallCategory[] = ['local', 'national', 'mobile', 'international', 'unclassified'];
 const CURRENCY_OPTIONS = ['PHP', 'USD'] as const;
 type SupportedCurrency = (typeof CURRENCY_OPTIONS)[number];
+type ImpactTarget = { category: string; currentRate: number; currency: SupportedCurrency };
+type DeletedRulesSnapshot = { rules: PrefixRule[]; label: string };
 
 const CATEGORY_STYLE: Record<CallCategory, string> = {
   local: 'bg-emerald-900/40 text-emerald-300 border-emerald-700',
@@ -33,23 +35,41 @@ function Badge({ cat }: { cat: CallCategory }) {
 // Delete Confirmation Modal Component
 function DeleteConfirmModal({ 
   isOpen, 
-  prefix, 
+  rule,
   onConfirm, 
   onCancel 
 }: { 
   isOpen: boolean; 
-  prefix: string; 
+  rule?: PrefixRule;
   onConfirm: () => void; 
   onCancel: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useModalFocusTrap(dialogRef, cancelRef, onCancel, isOpen);
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onCancel}>
-      <div className="bg-[#0d1a36] border border-gray-700 p-6 rounded-2xl max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-bold mb-2" style={{ color: 'var(--text)' }}>Delete Rule "{prefix}"?</h3>
-        <p className="text-sm mb-6" style={{ color: 'var(--muted)' }}>This will remove the classification rule. This action cannot be undone.</p>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-rule-title"
+        aria-describedby="delete-rule-desc"
+        className="bg-[#0d1a36] border border-gray-700 p-6 rounded-2xl max-w-sm w-full mx-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 id="delete-rule-title" className="text-base font-bold mb-2" style={{ color: 'var(--text)' }}>
+          Delete Rule "{rule?.prefix || ''}"?
+        </h3>
+        <p id="delete-rule-desc" className="text-sm mb-2" style={{ color: 'var(--muted)' }}>
+          This will remove the classification rule. This action cannot be undone.
+        </p>
+        <p className="text-xs mb-6" style={{ color: 'var(--muted2)' }}>
+          {rule ? `${rule.category} • Priority ${rule.priority}${rule.description ? ` • ${rule.description}` : ''}` : ''}
+        </p>
         <div className="flex gap-2 justify-end">
-          <button onClick={onCancel} className="rounded-2xl border px-4 py-2 text-sm h-9 font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>Cancel</button>
+          <button ref={cancelRef} onClick={onCancel} className="rounded-2xl border px-4 py-2 text-sm h-9 font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>Cancel</button>
           <button onClick={onConfirm} className="rounded-2xl bg-red-600 px-4 py-2 text-sm h-9 font-semibold text-white">Delete</button>
         </div>
       </div>
@@ -83,14 +103,25 @@ function BulkActionModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useModalFocusTrap(dialogRef, cancelRef, onCancel, isOpen && !!action);
   if (!isOpen || !action) return null;
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onCancel}>
-      <div className="bg-[#0d1a36] border border-gray-700 p-6 rounded-2xl max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-bold mb-2" style={{ color: 'var(--text)' }}>Bulk {action === 'delete' ? 'Delete' : action === 'enable' ? 'Enable' : 'Disable'}?</h3>
-        <p className="text-sm mb-6" style={{ color: 'var(--muted)' }}>Apply {action} to {count} rule(s)?{action === 'delete' ? ' This action cannot be undone.' : ''}</p>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bulk-action-title"
+        aria-describedby="bulk-action-desc"
+        className="bg-[#0d1a36] border border-gray-700 p-6 rounded-2xl max-w-sm w-full mx-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 id="bulk-action-title" className="text-base font-bold mb-2" style={{ color: 'var(--text)' }}>Bulk {action === 'delete' ? 'Delete' : action === 'enable' ? 'Enable' : 'Disable'}?</h3>
+        <p id="bulk-action-desc" className="text-sm mb-6" style={{ color: 'var(--muted)' }}>Apply {action} to {count} rule(s)?{action === 'delete' ? ' This action cannot be undone.' : ''}</p>
         <div className="flex gap-2 justify-end">
-          <button onClick={onCancel} className="rounded-2xl border px-4 py-2 text-sm h-9 font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>Cancel</button>
+          <button ref={cancelRef} onClick={onCancel} className="rounded-2xl border px-4 py-2 text-sm h-9 font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>Cancel</button>
           <button onClick={onConfirm} className={`rounded-2xl px-4 py-2 text-sm h-9 font-semibold text-white ${action === 'delete' ? 'bg-red-600' : 'bg-brand-600'}`}>{action === 'delete' ? 'Delete All' : `${action === 'enable' ? 'Enable' : 'Disable'} All`}</button>
         </div>
       </div>
@@ -196,6 +227,167 @@ function formatRuntimeError(error: unknown): string {
   return 'Request failed';
 }
 
+function formatCurrency(value: number, currency = 'PHP') {
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: currency || 'PHP',
+    minimumFractionDigits: 2
+  }).format(value || 0);
+}
+
+function useModalFocusTrap(
+  containerRef: { current: HTMLElement | null },
+  initialFocusRef: { current: HTMLElement | null },
+  onClose?: () => void,
+  active = true
+) {
+  useEffect(() => {
+    if (!active) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const previousActive = document.activeElement as HTMLElement | null;
+    const focusableSelector =
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    const focusFirst = () => {
+      if (initialFocusRef.current) {
+        initialFocusRef.current.focus();
+        return;
+      }
+      const focusables = Array.from(container.querySelectorAll<HTMLElement>(focusableSelector));
+      focusables[0]?.focus();
+    };
+
+    const frame = window.requestAnimationFrame(focusFirst);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (onClose) onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusables = Array.from(container.querySelectorAll<HTMLElement>(focusableSelector));
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (event.shiftKey) {
+        if (active === first || !container.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+        return;
+      }
+      if (active === last || !container.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', onKeyDown);
+      if (previousActive && typeof previousActive.focus === 'function') previousActive.focus();
+    };
+  }, [containerRef, initialFocusRef, onClose, active]);
+}
+
+function ImpactAnalysisModal({
+  target,
+  proposedRate,
+  onProposedRateChange,
+  onAnalyze,
+  analyzing,
+  impactAnalysis,
+  onClose
+}: {
+  target: ImpactTarget | null;
+  proposedRate: string;
+  onProposedRateChange: (value: string) => void;
+  onAnalyze: () => void;
+  analyzing: boolean;
+  impactAnalysis: any;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useModalFocusTrap(dialogRef, closeRef, onClose, !!target);
+  if (!target) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="impact-analysis-title"
+        className="bg-[#0d1a36] border border-gray-700 p-6 rounded-2xl max-w-lg w-full mx-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h3 id="impact-analysis-title" className="text-base font-bold" style={{ color: 'var(--text)' }}>Impact Analysis: {target.category}</h3>
+          <button ref={closeRef} onClick={onClose} className="text-xs" style={{ color: 'var(--muted)' }} aria-label="Close impact analysis">✕</button>
+        </div>
+
+        <div className="space-y-3 mb-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Current Rate</p>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{formatCurrency(target.currentRate, target.currency)}/min</p>
+            </div>
+            <div>
+              <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Proposed Rate</p>
+              <input
+                type="number"
+                step="0.01"
+                className="w-full rounded-xl border px-2 py-1 text-sm h-9"
+                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                value={proposedRate}
+                onChange={e => onProposedRateChange(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <button
+            className="w-full rounded-2xl bg-brand-600 px-4 py-2 text-sm h-9 font-semibold text-white disabled:opacity-50"
+            disabled={analyzing || !proposedRate}
+            onClick={onAnalyze}
+          >
+            {analyzing ? 'Analyzing...' : 'Calculate Impact'}
+          </button>
+        </div>
+
+        {impactAnalysis && (
+          <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: 'var(--brand)', background: 'rgba(36,132,235,0.1)' }}>
+            <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>30-Day Projection</p>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <p style={{ color: 'var(--muted)' }}>Affected Calls</p>
+                <p className="font-semibold" style={{ color: 'var(--text)' }}>{impactAnalysis.overall?.totalAffectedCalls || 0}</p>
+              </div>
+              <div>
+                <p style={{ color: 'var(--muted)' }}>Current Revenue</p>
+                <p className="font-semibold" style={{ color: 'var(--text)' }}>{formatCurrency(impactAnalysis.overall?.currentRevenue || 0, target.currency)}</p>
+              </div>
+              <div>
+                <p style={{ color: 'var(--muted)' }}>Projected Revenue</p>
+                <p className="font-semibold" style={{ color: 'var(--text)' }}>{formatCurrency(impactAnalysis.overall?.projectedRevenue || 0, target.currency)}</p>
+              </div>
+              <div>
+                <p style={{ color: 'var(--muted)' }}>Change</p>
+                <p className={`font-semibold ${(impactAnalysis.overall?.revenueChange || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {formatCurrency(impactAnalysis.overall?.revenueChange || 0, target.currency)} ({(impactAnalysis.overall?.revenueChangePercent || 0).toFixed(1)}%)
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function validateBillingConfig(config: BillingConfig): BillingValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -294,7 +486,6 @@ function validateBillingConfig(config: BillingConfig): BillingValidationResult {
 export function BillingSettingsPage() {
   const [serverConfig, setServerConfig] = useState<BillingConfig | null>(null);
   const [draftConfig, setDraftConfig] = useState<BillingConfig | null>(null);
-  const [tab, setTab] = useState<'prefixes' | 'rates' | 'test' | 'history'>('prefixes');
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -308,7 +499,7 @@ export function BillingSettingsPage() {
   const [testError, setTestError] = useState('');
   const [testResult, setTestResult] = useState<CallBilling | null>(null);
   const [testing, setTesting] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; ruleId?: string; prefix?: string }>({ isOpen: false });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; ruleId?: string }>({ isOpen: false });
   const [duplicateWarning, setDuplicateWarning] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
@@ -317,8 +508,10 @@ export function BillingSettingsPage() {
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [impactAnalysis, setImpactAnalysis] = useState<any>(null);
   const [analyzingImpact, setAnalyzingImpact] = useState(false);
-  const [showImpactFor, setShowImpactFor] = useState<{ category: string; currentRate: number } | null>(null);
+  const [showImpactFor, setShowImpactFor] = useState<ImpactTarget | null>(null);
   const [proposedRate, setProposedRate] = useState('');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastDeletedRules, setLastDeletedRules] = useState<DeletedRulesSnapshot | null>(null);
 
   const saveQueueRef = useRef(Promise.resolve());
   const messageTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -348,6 +541,8 @@ export function BillingSettingsPage() {
       const sanitized = sanitizeBillingConfig(loaded as BillingConfig);
       setServerConfig(sanitized);
       setDraftConfig(cloneConfig(sanitized));
+      setHasUnsavedChanges(false);
+      setLastDeletedRules(null);
       if (audit && audit.entries) setAuditHistory(audit.entries);
       setErrorMsg('');
     } catch (error) {
@@ -378,11 +573,6 @@ export function BillingSettingsPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [deleteConfirm.isOpen, bulkActionConfirm.isOpen, showImpactFor]);
 
-  const hasUnsavedChanges = useMemo(() => {
-    if (!serverConfig || !draftConfig) return false;
-    return JSON.stringify(serverConfig) !== JSON.stringify(draftConfig);
-  }, [draftConfig, serverConfig]);
-
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!hasUnsavedChanges) return;
@@ -394,9 +584,18 @@ export function BillingSettingsPage() {
   }, [hasUnsavedChanges]);
 
   const validation = useMemo(() => {
-    if (!draftConfig) return { errors: [], warnings: [], shadowedRuleIds: new Set<string>() };
+    if (!draftConfig) return { errors: [], warnings: [], shadowedRuleIds: new Set<string>(), fieldErrors: {} as Record<string, string> };
     return validateBillingConfig(draftConfig);
   }, [draftConfig]);
+
+  const fieldIssues = useMemo(() => Object.entries(validation.fieldErrors), [validation.fieldErrors]);
+
+  const focusFieldByKey = useCallback((fieldKey: string) => {
+    const target = document.getElementById(fieldKey);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (target instanceof HTMLElement) target.focus();
+  }, []);
 
   const sortedRules = useMemo(() => {
     if (!draftConfig) return [];
@@ -414,7 +613,9 @@ export function BillingSettingsPage() {
   const patchDraft = (updater: (current: BillingConfig) => BillingConfig) => {
     setDraftConfig((current) => {
       if (!current) return current;
-      return updater(current);
+      const next = updater(current);
+      if (next !== current) setHasUnsavedChanges(true);
+      return next;
     });
   };
 
@@ -427,6 +628,8 @@ export function BillingSettingsPage() {
           const updated = sanitizeBillingConfig((await api.saveBillingConfig(payload)) as BillingConfig);
           setServerConfig(updated);
           setDraftConfig(cloneConfig(updated));
+          setHasUnsavedChanges(false);
+          setLastDeletedRules(null);
           flashStatus(`Saved at ${dayjs().format('HH:mm:ss')}`);
         })
         .catch((error) => {
@@ -457,6 +660,8 @@ export function BillingSettingsPage() {
     setDraftConfig(cloneConfig(serverConfig));
     setNewRule({ ...EMPTY_RULE });
     setExpandedTierCategory(null);
+    setHasUnsavedChanges(false);
+    setLastDeletedRules(null);
     flashStatus('Changes reverted');
   };
 
@@ -503,12 +708,30 @@ export function BillingSettingsPage() {
 
   const deleteRule = () => {
     if (!deleteConfirm.ruleId) return;
+    const removed = draftConfig?.prefixRules.find((rule) => rule.id === deleteConfirm.ruleId);
     patchDraft((cfg) => ({
       ...cfg,
       prefixRules: cfg.prefixRules.filter((rule) => rule.id !== deleteConfirm.ruleId)
     }));
     setDeleteConfirm({ isOpen: false });
+    if (removed) {
+      setLastDeletedRules({ rules: [removed], label: removed.prefix });
+      flashStatus(`Deleted rule ${removed.prefix}.`);
+    }
     setSelectedRuleIds(prev => { const next = new Set(prev); next.delete(deleteConfirm.ruleId!); return next; });
+  };
+
+  const undoDeleteRule = () => {
+    if (!lastDeletedRules || lastDeletedRules.rules.length === 0) return;
+    patchDraft((cfg) => ({
+      ...cfg,
+      prefixRules: [
+        ...cfg.prefixRules,
+        ...lastDeletedRules.rules.filter((rule) => !cfg.prefixRules.some((existing) => existing.id === rule.id))
+      ]
+    }));
+    flashStatus(`Restored ${lastDeletedRules.label}.`);
+    setLastDeletedRules(null);
   };
 
   // Bulk operations
@@ -527,20 +750,30 @@ export function BillingSettingsPage() {
   const confirmBulkAction = () => {
     if (!bulkActionConfirm.action || selectedRuleIds.size === 0) return;
     const action = bulkActionConfirm.action;
+    const selectedIds = new Set(selectedRuleIds);
+    const removedRules = action === 'delete'
+      ? (draftConfig?.prefixRules.filter((rule) => selectedIds.has(rule.id)) ?? [])
+      : [];
     patchDraft((cfg) => {
       if (action === 'delete') {
-        return { ...cfg, prefixRules: cfg.prefixRules.filter(r => !selectedRuleIds.has(r.id)) };
+        return { ...cfg, prefixRules: cfg.prefixRules.filter(r => !selectedIds.has(r.id)) };
       }
       return {
         ...cfg,
         prefixRules: cfg.prefixRules.map(r =>
-          selectedRuleIds.has(r.id) ? { ...r, enabled: action === 'enable' } : r
+          selectedIds.has(r.id) ? { ...r, enabled: action === 'enable' } : r
         )
       };
     });
     setBulkActionConfirm({ isOpen: false });
     setSelectedRuleIds(new Set());
-    flashStatus(`${selectedRuleIds.size} rule(s) ${action}d`);
+    if (action === 'delete' && removedRules.length > 0) {
+      const label = removedRules.length === 1 ? removedRules[0].prefix : `${removedRules.length} rules`;
+      setLastDeletedRules({ rules: removedRules, label });
+      flashStatus(`Deleted ${removedRules.length} rule(s).`);
+      return;
+    }
+    flashStatus(`${selectedIds.size} rule(s) ${action}d`);
   };
 
   const analyzeImpact = async (category: string, currentRate: number, proposedRateVal: number) => {
@@ -606,16 +839,369 @@ export function BillingSettingsPage() {
     }
   };
 
-  const formatCurrency = (value: number, currency = 'PHP') =>
-    new Intl.NumberFormat('en-PH', {
-      style: 'currency',
-      currency: currency || 'PHP',
-      minimumFractionDigits: 2
-    }).format(value || 0);
+  const renderRatesEditor = (embedded = false) => (
+    <div className={embedded ? 'h-full flex flex-col' : undefined}>
+      <div className="card p-4" style={embedded ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : undefined}>
+        <div
+          className="grid gap-3 flex-1 min-h-0"
+          style={{
+            gridTemplateRows: embedded ? 'minmax(240px, 1fr) minmax(300px, 1.35fr)' : 'minmax(240px, auto) minmax(300px, auto)'
+          }}
+        >
+          <div className="rounded-xl border min-h-0" style={{ borderColor: 'var(--border)', overflow: 'auto' }}>
+            <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b sticky top-0 z-[2]" style={{ borderColor: 'var(--border)', background: 'var(--surface-alt)' }}>
+                {['Category', 'Rate / Min', 'Min Blocks', 'Block Size', 'Weekend x', 'Holiday x', 'Currency', 'Tiers', 'Impact'].map((header) => (
+                  <th key={header} className="text-center px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {draftConfig.rates.map((rate) => (
+                <Fragment key={rate.category}>
+                  <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+                    <td className="px-3 py-2 text-center"><div className="flex justify-center"><Badge cat={rate.category} /></div></td>
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="w-24 rounded border px-2 py-1 text-xs text-center mx-auto block"
+                        style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        value={rate.ratePerMinute}
+                        onChange={(event) => updateRateField(rate.category, 'ratePerMinute', toFiniteNumber(event.target.value, 0))}
+                        disabled={rate.category === 'unclassified'}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-20 rounded border px-2 py-1 text-xs text-center mx-auto block"
+                        style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        value={rate.minimumCharge}
+                        onChange={(event) => updateRateField(rate.category, 'minimumCharge', Math.floor(toFiniteNumber(event.target.value, 0)))}
+                        disabled={rate.category === 'unclassified'}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <select
+                        className="rounded border px-2 py-1 text-xs text-center mx-auto block"
+                        style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        value={rate.blockSize}
+                        onChange={(event) => updateRateField(rate.category, 'blockSize', Math.floor(toFiniteNumber(event.target.value, 60)))}
+                        disabled={rate.category === 'unclassified'}
+                      >
+                        <option value={1}>1 sec</option>
+                        <option value={6}>6 sec</option>
+                        <option value={30}>30 sec</option>
+                        <option value={60}>60 sec</option>
+                      </select>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="w-20 rounded border px-2 py-1 text-xs text-center mx-auto block"
+                        style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        value={rate.weekendMultiplier ?? ''}
+                        placeholder="1.00"
+                        onChange={(event) =>
+                          updateRateField(
+                            rate.category,
+                            'weekendMultiplier',
+                            event.target.value === '' ? undefined : toFiniteNumber(event.target.value, 1)
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="w-20 rounded border px-2 py-1 text-xs text-center mx-auto block"
+                        style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        value={rate.holidayMultiplier ?? ''}
+                        placeholder="1.00"
+                        onChange={(event) =>
+                          updateRateField(
+                            rate.category,
+                            'holidayMultiplier',
+                            event.target.value === '' ? undefined : toFiniteNumber(event.target.value, 1)
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <select
+                        className="w-20 rounded border px-2 py-1 text-xs text-center mx-auto block"
+                        style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        value={rate.currency}
+                        onChange={(event) =>
+                          patchDraft((cfg) => {
+                            const nextCurrency = normalizeCurrency(event.target.value);
+                            const rates = cfg.rates.map((entry) =>
+                              entry.category === rate.category ? { ...entry, currency: nextCurrency } : entry
+                            );
+                            const currencies = new Set(rates.map((entry) => normalizeCurrency(entry.currency)));
+                            return {
+                              ...cfg,
+                              rates,
+                              currency: currencies.size === 1 ? Array.from(currencies)[0] : cfg.currency
+                            };
+                          })
+                        }
+                      >
+                        {CURRENCY_OPTIONS.map((currency) => (
+                          <option key={currency} value={currency}>{currency}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <button
+                        type="button"
+                        className="rounded border px-2 py-1 text-xs mx-auto block"
+                        style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                        onClick={() => setExpandedTierCategory(expandedTierCategory === rate.category ? null : rate.category)}
+                      >
+                        {expandedTierCategory === rate.category ? 'Hide' : 'Edit'} ({rate.tiers?.length ?? 0})
+                      </button>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <button
+                        type="button"
+                        className="rounded-2xl bg-purple-600 px-3 py-1.5 text-xs h-8 font-semibold text-white mx-auto block"
+                        onClick={() => { setShowImpactFor({ category: rate.category, currentRate: rate.ratePerMinute, currency: normalizeCurrency(rate.currency) }); setProposedRate(String(rate.ratePerMinute)); setImpactAnalysis(null); }}
+                      >
+                        Analyze
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedTierCategory === rate.category && (
+                    <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+                      <td colSpan={9} className="px-3 py-3">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
+                              Tiered Pricing for {rate.category}
+                            </p>
+                            <button
+                              type="button"
+                              className="rounded border px-2 py-1 text-xs"
+                              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                              onClick={() => addTier(rate.category)}
+                            >
+                              + Add Tier
+                            </button>
+                          </div>
+                          {(rate.tiers ?? []).map((tier, index) => (
+                            <div key={`${rate.category}-tier-${index}`} className="grid grid-cols-4 gap-2">
+                              <input
+                                type="number"
+                                min={0}
+                                className="rounded border px-2 py-1 text-xs"
+                                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                                value={tier.minMinutes}
+                                placeholder="Min minutes"
+                                onChange={(event) => updateTier(rate.category, index, { minMinutes: Math.floor(toFiniteNumber(event.target.value, 0)) })}
+                              />
+                              <input
+                                type="number"
+                                min={0}
+                                className="rounded border px-2 py-1 text-xs"
+                                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                                value={tier.maxMinutes ?? ''}
+                                placeholder="Max minutes (optional)"
+                                onChange={(event) =>
+                                  updateTier(rate.category, index, {
+                                    maxMinutes: event.target.value === '' ? undefined : Math.floor(toFiniteNumber(event.target.value, 0))
+                                  })
+                                }
+                              />
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                className="rounded border px-2 py-1 text-xs"
+                                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                                value={tier.ratePerMinute}
+                                placeholder="Rate per minute"
+                                onChange={(event) => updateTier(rate.category, index, { ratePerMinute: toFiniteNumber(event.target.value, 0) })}
+                              />
+                              <button
+                                type="button"
+                                className="rounded border px-2 py-1 text-xs text-rose-400"
+                                style={{ borderColor: 'var(--border)' }}
+                                onClick={() => removeTier(rate.category, index)}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          {(rate.tiers ?? []).length === 0 && (
+                            <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                              No tiers configured. Calls use base rate.
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+            </table>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 min-h-0">
+            <div className="min-h-0 overflow-auto">
+              {renderTestPanel()}
+            </div>
+            <div className="min-h-0 overflow-auto">
+              {renderHistoryPanel()}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderHistoryPanel = () => (
+    <div className="card p-3 md:p-4 h-full flex flex-col">
+      <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text)' }}>Change History</p>
+      {auditHistory.length === 0 ? (
+        <div className="flex-1 grid place-items-center text-center py-6">
+          <div className="text-5xl mb-4">📋</div>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>No changes yet</p>
+          <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>Changes to billing configuration will appear here</p>
+        </div>
+      ) : (
+        <div className="space-y-2 flex-1 min-h-0 overflow-auto pr-1">
+          {auditHistory.map((entry, idx) => (
+            <div key={idx} className="flex items-center justify-between p-3 rounded-xl border" style={{ borderColor: 'var(--border)' }}>
+              <div>
+                <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
+                  {entry.changeType}{entry.category && ` (${entry.category})`}
+                </p>
+                <p className="text-[10px] mt-1" style={{ color: 'var(--muted)' }}>
+                  {entry.previousValue || '—'} → {entry.newValue || '—'}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px]" style={{ color: 'var(--muted2)' }}>{entry.user || 'system'}</p>
+                <p className="text-[10px]" style={{ color: 'var(--muted2)' }}>{entry.createdAt ? dayjs(entry.createdAt).format('MMM D, HH:mm') : ''}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderTestPanel = () => (
+    <div className="card p-3 md:p-4 h-full flex flex-col">
+      <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Test Number</p>
+      <p className="text-xs mt-1 mb-2" style={{ color: 'var(--muted)' }}>
+        Test number classification and pricing with date/holiday inputs.
+      </p>
+      <div className="space-y-2.5">
+        <label className="text-xs block" style={{ color: 'var(--text)' }}>
+          Phone Number
+          <input
+            className="mt-1 w-full rounded-xl border px-3 py-2 font-mono text-sm h-9"
+            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+            placeholder="e.g. 09171234567"
+            value={testNum}
+            onChange={(event) => setTestNum(event.target.value)}
+          />
+        </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          <label className="text-xs block" style={{ color: 'var(--text)' }}>
+            Duration (seconds)
+            <input
+              type="number"
+              min={1}
+              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm h-9"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              value={testDur}
+              onChange={(event) => setTestDur(Math.max(1, Math.floor(toFiniteNumber(event.target.value, 1))))}
+            />
+          </label>
+          <label className="text-xs block" style={{ color: 'var(--text)' }}>
+            Call Date
+            <input
+              type="date"
+              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm h-9"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              value={testCallDate}
+              onChange={(event) => setTestCallDate(event.target.value)}
+            />
+          </label>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-0.5">
+          <label className="inline-flex items-center gap-2 text-xs" style={{ color: 'var(--text)' }}>
+            <input type="checkbox" checked={testHoliday} onChange={(event) => setTestHoliday(event.target.checked)} />
+            Treat as holiday
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              void runTest();
+            }}
+            disabled={testing}
+            className="rounded-xl bg-brand-600 px-4 py-1.5 h-8 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {testing ? 'Testing...' : 'Run Test'}
+          </button>
+        </div>
+      </div>
+      {testError && <p className="text-xs" style={{ color: 'var(--red)' }}>{testError}</p>}
+      {testResult && (
+        <div className="mt-2 rounded-2xl border p-3 space-y-1.5 min-h-[170px] max-h-[360px] overflow-auto flex-1" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex justify-between text-xs">
+            <span style={{ color: 'var(--muted)' }}>Category</span>
+            <Badge cat={testResult.category} />
+          </div>
+          <div className="flex justify-between text-xs">
+            <span style={{ color: 'var(--muted)' }}>Matched Prefix</span>
+            <span className="font-mono font-bold" style={{ color: 'var(--text)' }}>{testResult.matchedPrefix ?? '(none)'}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span style={{ color: 'var(--muted)' }}>Billable Units</span>
+            <span style={{ color: 'var(--text)' }}>{testResult.billableUnits}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span style={{ color: 'var(--muted)' }}>Effective Rate / min</span>
+            <span style={{ color: 'var(--text)' }}>{formatCurrency(testResult.ratePerMinute, testResult.currency)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span style={{ color: 'var(--muted)' }}>Base Cost</span>
+            <span style={{ color: 'var(--text)' }}>{formatCurrency(testResult.baseCost ?? testResult.cost, testResult.currency)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span style={{ color: 'var(--muted)' }}>Multiplier</span>
+            <span style={{ color: 'var(--text)' }}>{(testResult.appliedMultiplier ?? 1).toFixed(2)}x</span>
+          </div>
+          <div className="flex justify-between text-sm border-t pt-2 font-bold" style={{ borderColor: 'var(--border)' }}>
+            <span style={{ color: 'var(--text)' }}>Total Cost</span>
+            <span className="text-brand-400">{formatCurrency(testResult.totalWithTax ?? testResult.cost, testResult.currency)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   if (!draftConfig) {
     return <div className="card p-4" style={{ color: 'var(--muted)' }}>Loading billing config...</div>;
   }
+
+  const rulePendingDelete = deleteConfirm.ruleId
+    ? draftConfig.prefixRules.find((rule) => rule.id === deleteConfirm.ruleId)
+    : undefined;
 
   return (
     <>
@@ -633,21 +1219,7 @@ export function BillingSettingsPage() {
               Last saved: {serverConfig?.updatedAt ? dayjs(serverConfig.updatedAt).format('YYYY-MM-DD HH:mm:ss') : 'n/a'}
             </p>
           </div>
-          <div className="flex flex-1 justify-center self-start pt-0.5">
-            <div className="flex flex-wrap justify-center gap-2">
-              {(['prefixes', 'rates', 'history', 'test'] as const).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setTab(item)}
-                  className={`rounded-2xl px-4 py-2 text-sm font-semibold capitalize transition ${tab === item ? 'bg-brand-600 text-white' : 'border'}`}
-                  style={tab === item ? undefined : { borderColor: 'var(--border)', color: 'var(--text)' }}
-                >
-                  {item === 'prefixes' ? 'Prefix Rules' : item === 'rates' ? 'Rates' : item === 'history' ? 'History' : 'Test Number'}
-                </button>
-              ))}
-            </div>
-          </div>
+          <div className="flex-1" />
           <div className="grid gap-2 sm:grid-cols-2 self-start">
             <label className="text-xs" style={{ color: 'var(--muted)' }}>
               Default Currency
@@ -655,7 +1227,14 @@ export function BillingSettingsPage() {
                 className="mt-1 w-full rounded-xl border px-3 py-2 text-sm h-9"
                 style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
                 value={draftConfig.currency}
-                onChange={(event) => patchDraft((cfg) => ({ ...cfg, currency: normalizeCurrency(event.target.value) }))}
+                onChange={(event) => {
+                  const nextCurrency = normalizeCurrency(event.target.value);
+                  patchDraft((cfg) => ({
+                    ...cfg,
+                    currency: nextCurrency,
+                    rates: cfg.rates.map((rate) => ({ ...rate, currency: nextCurrency }))
+                  }));
+                }}
               >
                 {CURRENCY_OPTIONS.map((currency) => (
                   <option key={currency} value={currency}>{currency}</option>
@@ -685,7 +1264,7 @@ export function BillingSettingsPage() {
             </div>
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-xs">
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs" aria-live="polite">
           <div className="flex flex-wrap items-center gap-2">
             {hasUnsavedChanges ? (
               <span className="rounded-full border px-2 py-0.5" style={{ color: '#f59e0b', borderColor: '#f59e0b44' }}>
@@ -699,17 +1278,16 @@ export function BillingSettingsPage() {
             {statusMsg && <span style={{ color: 'var(--green)' }}>{statusMsg}</span>}
             {errorMsg && <span style={{ color: 'var(--red)' }}>{errorMsg}</span>}
           </div>
-          <label className="inline-flex items-center gap-3 text-sm font-semibold justify-self-center" style={{ color: 'var(--muted)' }}>
-            Billing Enabled
+          {lastDeletedRules && (
             <button
               type="button"
-              onClick={() => patchDraft((cfg) => ({ ...cfg, enabled: !cfg.enabled }))}
-              className={`inline-flex h-7 w-14 items-center rounded-full transition ${draftConfig.enabled ? 'bg-brand-600' : 'bg-gray-600'}`}
+              className="rounded-full border px-3 py-1 font-semibold"
+              style={{ borderColor: 'rgba(245,158,11,0.45)', color: '#fbbf24' }}
+              onClick={undoDeleteRule}
             >
-              <span className={`h-6 w-6 rounded-full bg-white transition ${draftConfig.enabled ? 'translate-x-7' : 'translate-x-1'}`} />
+              Undo delete: {lastDeletedRules.label}
             </button>
-          </label>
-          <div />
+          )}
         </div>
       </div>
 
@@ -729,15 +1307,41 @@ export function BillingSettingsPage() {
               {validation.warnings.map((warning) => <p key={warning} style={{ color: 'var(--text)' }}>{warning}</p>)}
             </div>
           )}
+          {fieldIssues.length > 0 && (
+            <div className="rounded-xl border p-2 text-xs space-y-1" style={{ borderColor: 'rgba(36,132,235,0.35)', background: 'rgba(36,132,235,0.08)' }}>
+              <p style={{ color: 'var(--brand)', fontWeight: 700 }}>Jump to field ({fieldIssues.length})</p>
+              <div className="flex flex-wrap gap-1.5">
+                {fieldIssues.map(([fieldKey, message]) => (
+                  <button
+                    key={fieldKey}
+                    type="button"
+                    onClick={() => focusFieldByKey(fieldKey)}
+                    className="rounded-full border px-2 py-0.5"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                  >
+                    {fieldKey.endsWith('-prefix')
+                      ? 'Prefix'
+                      : fieldKey.endsWith('-priority')
+                      ? 'Priority'
+                      : fieldKey.endsWith('-description')
+                      ? 'Description'
+                      : fieldKey.endsWith('-category')
+                      ? 'Category'
+                      : 'Field'}
+                    : {message}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Tab Content */}
-      {tab === 'prefixes' && (
-        <div className="space-y-3">
+      {/* Main Content */}
+      <div className="space-y-3">
           <div className="card p-4">
             <p className="text-xs font-semibold mb-3" style={{ color: 'var(--text)' }}>Add Prefix Rule</p>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2">
               <div>
                 <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Category</p>
                 <select
@@ -798,471 +1402,164 @@ export function BillingSettingsPage() {
             )}
           </div>
 
-          <div className="card p-4" style={{ height: 'clamp(422px, calc(70vh - 38px), 822px)', display: 'flex', flexDirection: 'column' }}>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2" style={{ flexShrink: 0 }}>
-              <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
-                Rules are matched by priority (asc), then prefix length (desc).
-              </p>
-              <div className="flex gap-2 items-center">
-                <input
-                  className="w-full max-w-xs rounded-xl border px-3 py-2 text-sm h-9"
-                  style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                  placeholder="Search rules..."
-                  value={ruleFilter}
-                  onChange={(event) => setRuleFilter(event.target.value)}
-                />
-                <button className="rounded-2xl border px-3 py-2 text-xs h-9 font-semibold whitespace-nowrap" style={{ borderColor: 'var(--border)', color: 'var(--text)' }} onClick={selectAllVisible}>Select All</button>
-              </div>
-            </div>
-
-            {/* Bulk Action Toolbar */}
-            {selectedRuleIds.size > 0 && (
-              <div className="mb-3 p-3 rounded-xl border flex items-center justify-between" style={{ borderColor: 'var(--brand)', background: 'rgba(36,132,235,0.1)', flexShrink: 0 }}>
-                <span className="text-xs font-semibold" style={{ color: 'var(--text)' }}>{selectedRuleIds.size} selected</span>
-                <div className="flex gap-2">
-                  <button className="rounded-2xl border px-3 py-1.5 text-xs h-8 font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--text)' }} onClick={() => handleBulkAction('enable')}>Enable</button>
-                  <button className="rounded-2xl border px-3 py-1.5 text-xs h-8 font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--text)' }} onClick={() => handleBulkAction('disable')}>Disable</button>
-                  <button className="rounded-2xl bg-red-600 px-3 py-1.5 text-xs h-8 font-semibold text-white" onClick={() => handleBulkAction('delete')}>Delete</button>
-                  <button className="rounded-2xl border px-3 py-1.5 text-xs h-8 font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--text)' }} onClick={clearSelection}>Clear</button>
+          <div className="grid gap-3 xl:grid-cols-2">
+            <div className="card p-4" style={{ height: 'clamp(420px, calc(70vh - 24px), 860px)', display: 'flex', flexDirection: 'column' }}>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2" style={{ flexShrink: 0 }}>
+                <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
+                  Rules are matched by priority (asc), then prefix length (desc). Showing {filteredRules.length} of {sortedRules.length}.
+                </p>
+                <div className="flex gap-2 items-center">
+                  <input
+                    className="w-full max-w-xs rounded-xl border px-3 py-2 text-sm h-9"
+                    style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                    placeholder="Search rules..."
+                    value={ruleFilter}
+                    onChange={(event) => setRuleFilter(event.target.value)}
+                  />
+                  <button className="rounded-2xl border px-3 py-2 text-xs h-9 font-semibold whitespace-nowrap" style={{ borderColor: 'var(--border)', color: 'var(--text)' }} onClick={selectAllVisible}>Select Filtered</button>
                 </div>
               </div>
-            )}
 
-            <div style={{ overflow: 'auto', flex: 1 }}>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-                    <th className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>✓</th>
-                    <th className="text-center px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Priority</th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Category</th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Prefix</th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Description</th>
-                    <th className="text-center px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Enabled</th>
-                    <th className="text-right px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRules.map((rule) => {
-                    const shadowed = validation.shadowedRuleIds.has(rule.id);
-                    return (
-                      <tr key={rule.id} className={`border-b ${!rule.enabled ? 'opacity-55' : ''}`} style={{ borderColor: 'var(--border)' }}>
-                        <td className="px-3 py-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedRuleIds.has(rule.id)}
-                            onChange={() => toggleRuleSelection(rule.id)}
-                            className="w-4 h-4"
-                            style={{ accentColor: 'var(--brand)' }}
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <input
-                            type="number"
-                            min={1}
-                            max={999}
-                            className="w-20 rounded border px-2 py-1 text-xs h-8 text-center"
-                            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                            value={rule.priority}
-                            onChange={(event) => updateRule(rule.id, { priority: Math.floor(toFiniteNumber(event.target.value, 1)) })}
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
-                            className="rounded border px-2 py-1 text-xs h-8"
-                            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                            value={rule.category}
-                            onChange={(event) => updateRule(rule.id, { category: event.target.value as CallCategory })}
-                          >
-                            {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
-                          </select>
-                        </td>
-                        <td className="px-3 py-2">
-                          <input
-                            className={`w-24 rounded border px-2 py-1 text-xs h-8 font-mono ${validation.fieldErrors[`rule-${rule.id}-prefix`] ? 'border-red-500' : ''}`}
-                            style={{ background: 'var(--surface-alt)', borderColor: validation.fieldErrors[`rule-${rule.id}-prefix`] ? 'var(--red)' : 'var(--border)', color: 'var(--text)' }}
-                            value={rule.prefix}
-                            onChange={(event) => updateRule(rule.id, { prefix: event.target.value })}
-                          />
-                          {shadowed && <p className="mt-1 text-[10px]" style={{ color: 'var(--orange)' }}>shadowed</p>}
-                          {validation.fieldErrors[`rule-${rule.id}-prefix`] && !shadowed && (
-                            <p className="mt-1 text-[10px]" style={{ color: 'var(--red)' }}>{validation.fieldErrors[`rule-${rule.id}-prefix`]}</p>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          <input
-                            className="w-full min-w-[180px] rounded border px-2 py-1 text-xs h-8"
-                            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                            value={rule.description}
-                            onChange={(event) => updateRule(rule.id, { description: event.target.value })}
-                          />
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => updateRule(rule.id, { enabled: !rule.enabled })}
-                            className={`w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors ${rule.enabled ? 'bg-brand-600 border-brand-600 text-white' : 'border-gray-500'}`}
-                          >
-                            {rule.enabled && '✓'}
-                          </button>
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <button type="button" onClick={() => setDeleteConfirm({ isOpen: true, ruleId: rule.id, prefix: rule.prefix })} className="text-xs text-rose-400 hover:text-rose-300">
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {filteredRules.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-xs" style={{ color: 'var(--muted)' }}>
-                        No rules found.
-                      </td>
+              {/* Bulk Action Toolbar */}
+              {selectedRuleIds.size > 0 && (
+                <div className="mb-3 p-3 rounded-xl border flex items-center justify-between" style={{ borderColor: 'var(--brand)', background: 'rgba(36,132,235,0.1)', flexShrink: 0 }}>
+                  <span className="text-xs font-semibold" style={{ color: 'var(--text)' }}>{selectedRuleIds.size} selected</span>
+                  <div className="flex gap-2">
+                    <button className="rounded-2xl border px-3 py-1.5 text-xs h-8 font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--text)' }} onClick={() => handleBulkAction('enable')}>Enable</button>
+                    <button className="rounded-2xl border px-3 py-1.5 text-xs h-8 font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--text)' }} onClick={() => handleBulkAction('disable')}>Disable</button>
+                    <button className="rounded-2xl bg-red-600 px-3 py-1.5 text-xs h-8 font-semibold text-white" onClick={() => handleBulkAction('delete')}>Delete</button>
+                    <button className="rounded-2xl border px-3 py-1.5 text-xs h-8 font-semibold" style={{ borderColor: 'var(--border)', color: 'var(--text)' }} onClick={clearSelection}>Clear</button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ overflow: 'auto', flex: 1 }}>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b sticky top-0 z-[2]" style={{ borderColor: 'var(--border)', background: 'var(--surface-alt)' }}>
+                      <th className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>✓</th>
+                      <th className="text-center px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Priority</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Category</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Prefix</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Description</th>
+                      <th className="text-center px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Enabled</th>
+                      <th className="text-right px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}></th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {tab === 'rates' && (
-        <div className="space-y-3">
-          <div className="card overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-                  {['Category', 'Rate / Min', 'Min Blocks', 'Block Size', 'Weekend x', 'Holiday x', 'Currency', 'Tiers', 'Impact'].map((header) => (
-                    <th key={header} className="text-center px-3 py-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
-                      {header}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {draftConfig.rates.map((rate) => (
-                  <>
-                    <tr key={rate.category} className="border-b" style={{ borderColor: 'var(--border)' }}>
-                      <td className="px-3 py-2 text-center"><div className="flex justify-center"><Badge cat={rate.category} /></div></td>
-                      <td className="px-3 py-2 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="w-24 rounded border px-2 py-1 text-xs text-center mx-auto block"
-                          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                          value={rate.ratePerMinute}
-                          onChange={(event) => updateRateField(rate.category, 'ratePerMinute', toFiniteNumber(event.target.value, 0))}
-                          disabled={rate.category === 'unclassified'}
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          className="w-20 rounded border px-2 py-1 text-xs text-center mx-auto block"
-                          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                          value={rate.minimumCharge}
-                          onChange={(event) => updateRateField(rate.category, 'minimumCharge', Math.floor(toFiniteNumber(event.target.value, 0)))}
-                          disabled={rate.category === 'unclassified'}
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <select
-                          className="rounded border px-2 py-1 text-xs text-center mx-auto block"
-                          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                          value={rate.blockSize}
-                          onChange={(event) => updateRateField(rate.category, 'blockSize', Math.floor(toFiniteNumber(event.target.value, 60)))}
-                          disabled={rate.category === 'unclassified'}
-                        >
-                          <option value={1}>1 sec</option>
-                          <option value={6}>6 sec</option>
-                          <option value={30}>30 sec</option>
-                          <option value={60}>60 sec</option>
-                        </select>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="w-20 rounded border px-2 py-1 text-xs text-center mx-auto block"
-                          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                          value={rate.weekendMultiplier ?? ''}
-                          placeholder="1.00"
-                          onChange={(event) =>
-                            updateRateField(
-                              rate.category,
-                              'weekendMultiplier',
-                              event.target.value === '' ? undefined : toFiniteNumber(event.target.value, 1)
-                            )
-                          }
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="w-20 rounded border px-2 py-1 text-xs text-center mx-auto block"
-                          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                          value={rate.holidayMultiplier ?? ''}
-                          placeholder="1.00"
-                          onChange={(event) =>
-                            updateRateField(
-                              rate.category,
-                              'holidayMultiplier',
-                              event.target.value === '' ? undefined : toFiniteNumber(event.target.value, 1)
-                            )
-                          }
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <select
-                          className="w-20 rounded border px-2 py-1 text-xs text-center mx-auto block"
-                          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                          value={rate.currency}
-                          onChange={(event) => updateRateField(rate.category, 'currency', normalizeCurrency(event.target.value))}
-                        >
-                          {CURRENCY_OPTIONS.map((currency) => (
-                            <option key={currency} value={currency}>{currency}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <button
-                          type="button"
-                          className="rounded border px-2 py-1 text-xs mx-auto block"
-                          style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                          onClick={() => setExpandedTierCategory(expandedTierCategory === rate.category ? null : rate.category)}
-                        >
-                          {expandedTierCategory === rate.category ? 'Hide' : 'Edit'} ({rate.tiers?.length ?? 0})
-                        </button>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <button
-                          type="button"
-                          className="rounded-2xl bg-purple-600 px-3 py-1.5 text-xs h-8 font-semibold text-white mx-auto block"
-                          onClick={() => { setShowImpactFor({ category: rate.category, currentRate: rate.ratePerMinute }); setProposedRate(String(rate.ratePerMinute)); setImpactAnalysis(null); }}
-                        >
-                          Analyze
-                        </button>
-                      </td>
-                    </tr>
-                    {expandedTierCategory === rate.category && (
-                      <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-                        <td colSpan={9} className="px-3 py-3">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
-                                Tiered Pricing for {rate.category}
-                              </p>
-                              <button
-                                type="button"
-                                className="rounded border px-2 py-1 text-xs"
-                                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                                onClick={() => addTier(rate.category)}
-                              >
-                                + Add Tier
-                              </button>
-                            </div>
-                            {(rate.tiers ?? []).map((tier, index) => (
-                              <div key={`${rate.category}-tier-${index}`} className="grid grid-cols-4 gap-2">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  className="rounded border px-2 py-1 text-xs"
-                                  style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                                  value={tier.minMinutes}
-                                  placeholder="Min minutes"
-                                  onChange={(event) => updateTier(rate.category, index, { minMinutes: Math.floor(toFiniteNumber(event.target.value, 0)) })}
-                                />
-                                <input
-                                  type="number"
-                                  min={0}
-                                  className="rounded border px-2 py-1 text-xs"
-                                  style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                                  value={tier.maxMinutes ?? ''}
-                                  placeholder="Max minutes (optional)"
-                                  onChange={(event) =>
-                                    updateTier(rate.category, index, {
-                                      maxMinutes: event.target.value === '' ? undefined : Math.floor(toFiniteNumber(event.target.value, 0))
-                                    })
-                                  }
-                                />
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  className="rounded border px-2 py-1 text-xs"
-                                  style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                                  value={tier.ratePerMinute}
-                                  placeholder="Rate per minute"
-                                  onChange={(event) => updateTier(rate.category, index, { ratePerMinute: toFiniteNumber(event.target.value, 0) })}
-                                />
-                                <button
-                                  type="button"
-                                  className="rounded border px-2 py-1 text-xs text-rose-400"
-                                  style={{ borderColor: 'var(--border)' }}
-                                  onClick={() => removeTier(rate.category, index)}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ))}
-                            {(rate.tiers ?? []).length === 0 && (
-                              <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                                No tiers configured. Calls use base rate.
-                              </p>
+                  </thead>
+                  <tbody>
+                    {filteredRules.map((rule) => {
+                      const shadowed = validation.shadowedRuleIds.has(rule.id);
+                      return (
+                        <tr key={rule.id} className={`border-b ${!rule.enabled ? 'opacity-55' : ''}`} style={{ borderColor: 'var(--border)' }}>
+                          <td className="px-3 py-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedRuleIds.has(rule.id)}
+                              onChange={() => toggleRuleSelection(rule.id)}
+                              className="w-4 h-4"
+                              style={{ accentColor: 'var(--brand)' }}
+                              aria-label={`Select rule ${rule.prefix}`}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              min={1}
+                              max={999}
+                              id={`rule-${rule.id}-priority`}
+                              className="w-20 rounded border px-2 py-1 text-xs h-8 text-center"
+                              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                              value={rule.priority}
+                              onChange={(event) => updateRule(rule.id, { priority: Math.floor(toFiniteNumber(event.target.value, 1)) })}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              id={`rule-${rule.id}-category`}
+                              className="rounded border px-2 py-1 text-xs h-8"
+                              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                              value={rule.category}
+                              onChange={(event) => updateRule(rule.id, { category: event.target.value as CallCategory })}
+                            >
+                              {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              id={`rule-${rule.id}-prefix`}
+                              className={`w-24 rounded border px-2 py-1 text-xs h-8 font-mono ${validation.fieldErrors[`rule-${rule.id}-prefix`] ? 'border-red-500' : ''}`}
+                              style={{ background: 'var(--surface-alt)', borderColor: validation.fieldErrors[`rule-${rule.id}-prefix`] ? 'var(--red)' : 'var(--border)', color: 'var(--text)' }}
+                              value={rule.prefix}
+                              onChange={(event) => updateRule(rule.id, { prefix: event.target.value })}
+                            />
+                            {shadowed && <p className="mt-1 text-[10px]" style={{ color: 'var(--orange)' }}>shadowed</p>}
+                            {validation.fieldErrors[`rule-${rule.id}-prefix`] && !shadowed && (
+                              <p className="mt-1 text-[10px]" style={{ color: 'var(--red)' }}>{validation.fieldErrors[`rule-${rule.id}-prefix`]}</p>
                             )}
-                          </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              id={`rule-${rule.id}-description`}
+                              className="w-full min-w-[180px] rounded border px-2 py-1 text-xs h-8"
+                              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                              value={rule.description}
+                              onChange={(event) => updateRule(rule.id, { description: event.target.value })}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => updateRule(rule.id, { enabled: !rule.enabled })}
+                              className={`w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors ${rule.enabled ? 'bg-brand-600 border-brand-600 text-white' : 'border-gray-500'}`}
+                              aria-pressed={rule.enabled}
+                              aria-label={`${rule.enabled ? 'Disable' : 'Enable'} rule ${rule.prefix}`}
+                            >
+                              {rule.enabled && '✓'}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirm({ isOpen: true, ruleId: rule.id })}
+                              className="rounded-lg border border-rose-500/50 px-2 py-1 text-xs font-semibold text-rose-300 hover:bg-rose-500/10"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredRules.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-8 text-center text-xs" style={{ color: 'var(--muted)' }}>
+                          No rules found.
                         </td>
                       </tr>
                     )}
-                  </>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex justify-end">
-            <button
-              type="button"
-              className="rounded-2xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              disabled={!hasUnsavedChanges || saving}
-              onClick={() => {
-                void saveCurrent();
-              }}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div
+              className="hidden xl:flex flex-col"
+              style={{ height: 'clamp(420px, calc(70vh - 24px), 860px)' }}
             >
-              {saving ? 'Saving...' : 'Save Rates & Multipliers'}
-            </button>
+              {renderRatesEditor(true)}
+            </div>
           </div>
-        </div>
-      )}
 
-      {tab === 'history' && (
-        <div className="card p-4">
-          <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>Change History</p>
-          {auditHistory.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-5xl mb-4">📋</div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>No changes yet</p>
-              <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>Changes to billing configuration will appear here</p>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-96 overflow-auto">
-              {auditHistory.map((entry, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 rounded-xl border" style={{ borderColor: 'var(--border)' }}>
-                  <div>
-                    <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
-                      {entry.changeType}{entry.category && ` (${entry.category})`}
-                    </p>
-                    <p className="text-[10px] mt-1" style={{ color: 'var(--muted)' }}>
-                      {entry.previousValue || '—'} → {entry.newValue || '—'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px]" style={{ color: 'var(--muted2)' }}>{entry.user || 'system'}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--muted2)' }}>{entry.createdAt ? dayjs(entry.createdAt).format('MMM D, HH:mm') : ''}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+          <div className="xl:hidden">
+            {renderRatesEditor(false)}
+          </div>
 
-      {tab === 'test' && (
-        <div className="card p-4 max-w-md space-y-3">
-          <p className="text-xs" style={{ color: 'var(--muted)' }}>
-            Test number classification and pricing with date/holiday inputs.
-          </p>
-          <label className="text-xs block" style={{ color: 'var(--text)' }}>
-            Phone Number
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2 font-mono text-sm"
-              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-              placeholder="e.g. 09171234567"
-              value={testNum}
-              onChange={(event) => setTestNum(event.target.value)}
-            />
-          </label>
-          <label className="text-xs block" style={{ color: 'var(--text)' }}>
-            Duration (seconds)
-            <input
-              type="number"
-              min={1}
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-              value={testDur}
-              onChange={(event) => setTestDur(Math.max(1, Math.floor(toFiniteNumber(event.target.value, 1))))}
-            />
-          </label>
-          <label className="text-xs block" style={{ color: 'var(--text)' }}>
-            Call Date
-            <input
-              type="date"
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-              value={testCallDate}
-              onChange={(event) => setTestCallDate(event.target.value)}
-            />
-          </label>
-          <label className="inline-flex items-center gap-2 text-xs" style={{ color: 'var(--text)' }}>
-            <input type="checkbox" checked={testHoliday} onChange={(event) => setTestHoliday(event.target.checked)} />
-            Treat as holiday
-          </label>
-          <button
-            type="button"
-            onClick={() => {
-              void runTest();
-            }}
-            disabled={testing}
-            className="rounded-2xl bg-brand-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {testing ? 'Testing...' : 'Run Test'}
-          </button>
-          {testError && <p className="text-xs" style={{ color: 'var(--red)' }}>{testError}</p>}
-          {testResult && (
-            <div className="rounded-2xl border p-3 space-y-1.5" style={{ borderColor: 'var(--border)' }}>
-              <div className="flex justify-between text-xs">
-                <span style={{ color: 'var(--muted)' }}>Category</span>
-                <Badge cat={testResult.category} />
-              </div>
-              <div className="flex justify-between text-xs">
-                <span style={{ color: 'var(--muted)' }}>Matched Prefix</span>
-                <span className="font-mono font-bold" style={{ color: 'var(--text)' }}>{testResult.matchedPrefix ?? '(none)'}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span style={{ color: 'var(--muted)' }}>Billable Units</span>
-                <span style={{ color: 'var(--text)' }}>{testResult.billableUnits}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span style={{ color: 'var(--muted)' }}>Effective Rate / min</span>
-                <span style={{ color: 'var(--text)' }}>{formatCurrency(testResult.ratePerMinute, testResult.currency)}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span style={{ color: 'var(--muted)' }}>Base Cost</span>
-                <span style={{ color: 'var(--text)' }}>{formatCurrency(testResult.baseCost ?? testResult.cost, testResult.currency)}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span style={{ color: 'var(--muted)' }}>Multiplier</span>
-                <span style={{ color: 'var(--text)' }}>{(testResult.appliedMultiplier ?? 1).toFixed(2)}x</span>
-              </div>
-              <div className="flex justify-between text-sm border-t pt-2 font-bold" style={{ borderColor: 'var(--border)' }}>
-                <span style={{ color: 'var(--text)' }}>Total Cost</span>
-                <span className="text-brand-400">{formatCurrency(testResult.totalWithTax ?? testResult.cost, testResult.currency)}</span>
-              </div>
-            </div>
-          )}
         </div>
-      )}
+      </div>
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={deleteConfirm.isOpen}
-        prefix={deleteConfirm.prefix || ''}
+        rule={rulePendingDelete}
         onConfirm={deleteRule}
         onCancel={() => setDeleteConfirm({ isOpen: false })}
       />
@@ -1276,72 +1573,18 @@ export function BillingSettingsPage() {
         onCancel={() => setBulkActionConfirm({ isOpen: false })}
       />
       
-      {/* Impact Analysis Panel */}
-      {showImpactFor && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowImpactFor(null)}>
-          <div className="bg-[#0d1a36] border border-gray-700 p-6 rounded-2xl max-w-lg w-full mx-4" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold" style={{ color: 'var(--text)' }}>Impact Analysis: {showImpactFor.category}</h3>
-              <button onClick={() => setShowImpactFor(null)} className="text-xs" style={{ color: 'var(--muted)' }}>✕</button>
-            </div>
-            
-            <div className="space-y-3 mb-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Current Rate</p>
-                  <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>₱{showImpactFor.currentRate.toFixed(2)}/min</p>
-                </div>
-                <div>
-                  <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>Proposed Rate</p>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full rounded-xl border px-2 py-1 text-sm h-9"
-                    style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                    value={proposedRate}
-                    onChange={e => setProposedRate(e.target.value)}
-                  />
-                </div>
-              </div>
-              
-              <button
-                className="w-full rounded-2xl bg-brand-600 px-4 py-2 text-sm h-9 font-semibold text-white disabled:opacity-50"
-                disabled={analyzingImpact || !proposedRate}
-                onClick={() => analyzeImpact(showImpactFor.category, showImpactFor.currentRate, parseFloat(proposedRate))}
-              >
-                {analyzingImpact ? 'Analyzing...' : 'Calculate Impact'}
-              </button>
-            </div>
-            
-            {impactAnalysis && (
-              <div className="rounded-xl border p-4 space-y-2" style={{ borderColor: 'var(--brand)', background: 'rgba(36,132,235,0.1)' }}>
-                <p className="text-xs font-semibold" style={{ color: 'var(--text)' }}>30-Day Projection</p>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <p style={{ color: 'var(--muted)' }}>Affected Calls</p>
-                    <p className="font-semibold" style={{ color: 'var(--text)' }}>{impactAnalysis.overall?.totalAffectedCalls || 0}</p>
-                  </div>
-                  <div>
-                    <p style={{ color: 'var(--muted)' }}>Current Revenue</p>
-                    <p className="font-semibold" style={{ color: 'var(--text)' }}>₱{(impactAnalysis.overall?.currentRevenue || 0).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p style={{ color: 'var(--muted)' }}>Projected Revenue</p>
-                    <p className="font-semibold" style={{ color: 'var(--text)' }}>₱{(impactAnalysis.overall?.projectedRevenue || 0).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p style={{ color: 'var(--muted)' }}>Change</p>
-                    <p className={`font-semibold ${(impactAnalysis.overall?.revenueChange || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      ₱{(impactAnalysis.overall?.revenueChange || 0).toFixed(2)} ({(impactAnalysis.overall?.revenueChangePercent || 0).toFixed(1)}%)
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      <ImpactAnalysisModal
+        target={showImpactFor}
+        proposedRate={proposedRate}
+        onProposedRateChange={setProposedRate}
+        onAnalyze={() => {
+          if (!showImpactFor) return;
+          void analyzeImpact(showImpactFor.category, showImpactFor.currentRate, parseFloat(proposedRate));
+        }}
+        analyzing={analyzingImpact}
+        impactAnalysis={impactAnalysis}
+        onClose={() => setShowImpactFor(null)}
+      />
     </>
   );
 }

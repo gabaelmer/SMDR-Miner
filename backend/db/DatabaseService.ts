@@ -9,6 +9,7 @@ import {
   BillingReportQuery,
   BillingReportSortBy,
   BillingReportTopCostCall,
+  BillingReportTopSpender,
   CallLogSummary,
   AnalyticsSummary,
   AnalyticsSnapshot,
@@ -1298,6 +1299,52 @@ export class DatabaseService {
        ORDER BY date ASC, currency ASC`
     ).all(...params) as BillingReportData['dailyTrend'];
 
+    const topSpendersRaw = this.crypto.isEnabled()
+      ? this.db.prepare(
+          `SELECT
+             MIN(calling_party) AS extension,
+             COUNT(1) AS call_count,
+             COALESCE(SUM(call_cost), 0) AS total_cost,
+             COALESCE(NULLIF(bill_currency, ''), 'PHP') AS currency
+           FROM smdr_records ${clause}
+           GROUP BY calling_party_hash, COALESCE(NULLIF(bill_currency, ''), 'PHP')
+           ORDER BY total_cost DESC
+           LIMIT 200`
+        ).all(...params) as Array<{
+          extension: string;
+          call_count: number;
+          total_cost: number;
+          currency: string;
+        }>
+      : this.db.prepare(
+          `SELECT
+             calling_party AS extension,
+             COUNT(1) AS call_count,
+             COALESCE(SUM(call_cost), 0) AS total_cost,
+             COALESCE(NULLIF(bill_currency, ''), 'PHP') AS currency
+           FROM smdr_records ${clause}
+           GROUP BY calling_party, COALESCE(NULLIF(bill_currency, ''), 'PHP')
+           ORDER BY total_cost DESC
+           LIMIT 200`
+        ).all(...params) as Array<{
+          extension: string;
+          call_count: number;
+          total_cost: number;
+          currency: string;
+        }>;
+
+    const topSpenders: BillingReportTopSpender[] = topSpendersRaw
+      .map((row) => {
+        const extension = this.crypto.decrypt(row.extension) ?? row.extension;
+        return {
+          extension: extension ?? '—',
+          call_count: Number(row.call_count ?? 0),
+          total_cost: Number(row.total_cost ?? 0),
+          currency: row.currency || 'PHP'
+        };
+      })
+      .filter((row) => row.extension.trim().length > 0);
+
     const includeAllTopCalls = query.includeAllTopCalls === true;
     const page = Math.max(1, query.page ?? 1);
     const pageSize = Math.min(Math.max(1, query.pageSize ?? 20), 100);
@@ -1383,6 +1430,7 @@ export class DatabaseService {
     return {
       summary,
       dailyTrend: trend,
+      topSpenders,
       topCostCalls,
       topCostCallsTotal: totalRow.count ?? 0,
       topCostCallsTruncated: includeAllTopCalls ? rawTopCostCalls.length < (totalRow.count ?? 0) : false

@@ -29,6 +29,7 @@ interface UserTableProps {
     onViewDetails: (username: string) => void;
     onDelete: (username: string) => void;
     onChangePassword: (username: string) => void;
+    onCreateUser?: () => void;
 }
 
 function formatDate(value?: string, includeTime: boolean = false): string {
@@ -62,7 +63,8 @@ export function UserTable({
     onBulkRoleChange,
     onViewDetails,
     onDelete,
-    onChangePassword
+    onChangePassword,
+    onCreateUser
 }: UserTableProps) {
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const fromRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -85,8 +87,20 @@ export function UserTable({
 
     return (
         <div className="card overflow-hidden">
+            {onCreateUser && (
+                <div className="px-4 pt-4 pb-2 flex justify-center">
+                    <button
+                        type="button"
+                        onClick={onCreateUser}
+                        className="rounded-2xl bg-brand-600 hover:bg-brand-500 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-900/20 transition-all transform active:scale-95 inline-flex items-center justify-center gap-2 min-w-[220px]"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" x2="19" y1="8" y2="14" /><line x1="22" x2="16" y1="11" y2="11" /></svg>
+                        Create New User
+                    </button>
+                </div>
+            )}
             {/* Search and Filter Bar */}
-            <div className="p-4 border-b flex flex-wrap gap-3 items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+            <div className="p-4 pt-2 border-b flex flex-wrap gap-3 items-center justify-between" style={{ borderColor: 'var(--border)' }}>
                 <div className="flex-1 min-w-[200px]">
                     <div
                         className="flex items-center rounded-xl border"
@@ -114,17 +128,6 @@ export function UserTable({
                     <option value="all">All Roles</option>
                     <option value="admin">Admin</option>
                     <option value="user">User</option>
-                </select>
-                <select
-                    value={String(pageSize)}
-                    onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                    className="rounded-xl border px-3 py-2 text-sm min-w-[120px]"
-                    style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
-                >
-                    <option value="10">10 / page</option>
-                    <option value="20">20 / page</option>
-                    <option value="50">50 / page</option>
-                    <option value="100">100 / page</option>
                 </select>
             </div>
 
@@ -309,9 +312,23 @@ export function UserTable({
             </table>
 
             <div className="p-3 border-t flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between" style={{ borderColor: 'var(--border)' }}>
-                <p className="text-xs opacity-60" style={{ color: 'var(--text)' }}>
-                    Showing {fromRow}-{toRow} of {total}
-                </p>
+                <div className="flex items-center gap-3 flex-wrap">
+                    <p className="text-xs opacity-60" style={{ color: 'var(--text)' }}>
+                        Showing {fromRow}-{toRow} of {total}
+                    </p>
+                    <select
+                        value={String(pageSize)}
+                        onChange={(e) => onPageSizeChange(Number(e.target.value))}
+                        className="rounded-lg border px-2 py-1 text-xs min-w-[96px]"
+                        style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        aria-label="Rows per page"
+                    >
+                        <option value="10">10 / page</option>
+                        <option value="20">20 / page</option>
+                        <option value="50">50 / page</option>
+                        <option value="100">100 / page</option>
+                    </select>
+                </div>
                 <div className="flex items-center gap-2">
                     <button
                         type="button"

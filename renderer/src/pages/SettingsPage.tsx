@@ -357,7 +357,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-148px)] min-h-0 overflow-hidden flex flex-col gap-2">
+    <div className="app-page gap-2">
       {statusError && (
         <div className="card p-3 bg-red-900/20 border border-red-700">
           <p className="text-sm font-semibold text-red-300">{statusError}</p>
@@ -391,16 +391,16 @@ export function SettingsPage() {
 
       {/* System Control - Full width row at top */}
       <div className="card p-3">
-        <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>System Control</p>
+        <div className="flex items-center justify-between mb-3 min-h-[28px]">
+          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>System Control</p>
+          <ConnectionStatusBadge status={connectionStatus} />
+        </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           {/* Configuration Actions - Left Side */}
           <div>
-            <div className="flex items-center justify-between mb-2 min-h-[28px]">
+            <div className="flex items-center mb-2 min-h-[28px]">
               <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Configuration</p>
-              <span className="invisible" aria-hidden="true">
-                <ConnectionStatusBadge status={connectionStatus} />
-              </span>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -432,9 +432,8 @@ export function SettingsPage() {
 
           {/* Stream Control - Right Side */}
           <div>
-            <div className="flex items-center justify-between mb-2 min-h-[28px]">
+            <div className="flex items-center mb-2 min-h-[28px]">
               <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Stream Control</p>
-              <ConnectionStatusBadge status={connectionStatus} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -742,13 +741,15 @@ export function SettingsPage() {
                   disabled={!isAdmin}
                 />
               </label>
-              <button
-                className="rounded-2xl border border-red-700 px-3 py-2 text-sm font-semibold text-red-300 disabled:opacity-50"
-                onClick={openPurgeModal}
-                disabled={!isAdmin || purging || purgeEstimateLoading}
-              >
-                {purgeEstimateLoading ? 'Estimating…' : 'Purge Data'}
-              </button>
+              <div className="ml-auto">
+                <button
+                  className="rounded-2xl border border-red-700 px-3 py-2 text-sm font-semibold text-red-300 disabled:opacity-50"
+                  onClick={openPurgeModal}
+                  disabled={!isAdmin || purging || purgeEstimateLoading}
+                >
+                  {purgeEstimateLoading ? 'Estimating…' : 'Purge Data'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

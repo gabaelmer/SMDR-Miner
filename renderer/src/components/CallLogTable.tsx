@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ColumnDef,
   flexRender,
@@ -72,6 +72,9 @@ const COMPLETION_LEGEND: Array<{ code: string; label: string }> = [
   { code: 'C', label: 'Caller Account Code' },
   { code: 'R', label: 'Receiver Account Code' }
 ];
+
+const VIRTUAL_ROW_HEIGHT = 54;
+const VIRTUAL_OVERSCAN = 8;
 
 function durationToSeconds(duration: string | undefined): number {
   if (!duration) return 0;
@@ -170,6 +173,9 @@ export function CallLogTable({
   });
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [copiedState, setCopiedState] = useState<string>('');
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(420);
 
   const selectedRecord = useMemo(() => rows.find((row) => recordKey(row) === selectedKey) ?? null, [rows, selectedKey]);
 
@@ -449,6 +455,48 @@ export function CallLogTable({
   };
 
   const pageCount = Math.max(table.getPageCount(), 1);
+  const rowModel = table.getRowModel().rows;
+  const visibleColumnsCount = table.getVisibleLeafColumns().length;
+  const shouldVirtualize = rowModel.length > 80;
+
+  useEffect(() => {
+    const node = viewportRef.current;
+    if (!node) return;
+
+    const updateHeight = () => {
+      setViewportHeight(node.clientHeight);
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const virtualRange = useMemo(() => {
+    if (!shouldVirtualize) {
+      return {
+        startIndex: 0,
+        endIndex: rowModel.length,
+        topSpacer: 0,
+        bottomSpacer: 0
+      };
+    }
+
+    const startIndex = Math.max(0, Math.floor(scrollTop / VIRTUAL_ROW_HEIGHT) - VIRTUAL_OVERSCAN);
+    const endIndex = Math.min(
+      rowModel.length,
+      Math.ceil((scrollTop + viewportHeight) / VIRTUAL_ROW_HEIGHT) + VIRTUAL_OVERSCAN
+    );
+    const topSpacer = startIndex * VIRTUAL_ROW_HEIGHT;
+    const bottomSpacer = Math.max(0, (rowModel.length - endIndex) * VIRTUAL_ROW_HEIGHT);
+    return { startIndex, endIndex, topSpacer, bottomSpacer };
+  }, [rowModel.length, scrollTop, shouldVirtualize, viewportHeight]);
+
+  const visibleRows = useMemo(
+    () => rowModel.slice(virtualRange.startIndex, virtualRange.endIndex),
+    [rowModel, virtualRange.endIndex, virtualRange.startIndex]
+  );
 
   return (
     <div className="card h-full min-h-0 flex flex-col" style={{ padding: '12px 14px', position: 'relative' }}>
@@ -468,6 +516,7 @@ export function CallLogTable({
             <input
               type="checkbox"
               checked={column.getIsVisible()}
+              aria-label={`Toggle ${String(column.columnDef.header)} column`}
               onChange={column.getToggleVisibilityHandler()}
               style={{ accentColor: 'var(--brand)' }}
             />
@@ -476,7 +525,11 @@ export function CallLogTable({
         ))}
       </div>
 
-      <div className="twrap flex-1 min-h-0">
+      <div
+        ref={viewportRef}
+        className="twrap flex-1 min-h-0"
+        onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+      >
         <table>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -484,6 +537,8 @@ export function CallLogTable({
                 {headerGroup.headers.map((header) => (
                   <th key={header.id} style={{ fontSize: '14px', fontWeight: 700, padding: '14px 12px', borderBottom: '2px solid var(--border)' }}>
                     <button
+                      type="button"
+                      aria-label={`Sort by ${String(header.column.columnDef.header)}`}
                       onClick={header.column.getToggleSortingHandler()}
                       style={{
                         background: 'none',
@@ -510,13 +565,28 @@ export function CallLogTable({
             ))}
           </thead>
           <tbody id="log-tbody">
-            {table.getRowModel().rows.map((row) => {
+            {virtualRange.topSpacer > 0 && (
+              <tr aria-hidden>
+                <td colSpan={visibleColumnsCount} style={{ padding: 0, borderBottom: 'none' }}>
+                  <div style={{ height: `${virtualRange.topSpacer}px` }} />
+                </td>
+              </tr>
+            )}
+            {visibleRows.map((row) => {
               const key = recordKey(row.original);
               const isSelected = selectedKey === key;
               return (
                 <tr
                   key={row.id}
+                  tabIndex={0}
+                  aria-selected={isSelected}
                   onClick={() => setSelectedKey(key)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelectedKey(key);
+                    }
+                  }}
                   style={{
                     cursor: 'pointer',
                     background: isSelected ? 'rgba(36, 132, 235, 0.16)' : undefined
@@ -530,9 +600,16 @@ export function CallLogTable({
                 </tr>
               );
             })}
-            {table.getRowModel().rows.length === 0 && (
+            {virtualRange.bottomSpacer > 0 && (
+              <tr aria-hidden>
+                <td colSpan={visibleColumnsCount} style={{ padding: 0, borderBottom: 'none' }}>
+                  <div style={{ height: `${virtualRange.bottomSpacer}px` }} />
+                </td>
+              </tr>
+            )}
+            {rowModel.length === 0 && (
               <tr>
-                <td colSpan={table.getVisibleLeafColumns().length} style={{ textAlign: 'center', padding: '40px 12px', color: 'var(--muted2)', fontSize: '15px' }}>
+                <td colSpan={visibleColumnsCount} style={{ textAlign: 'center', padding: '40px 12px', color: 'var(--muted2)', fontSize: '15px' }}>
                   No records found
                 </td>
               </tr>
@@ -564,7 +641,7 @@ export function CallLogTable({
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
         <div style={{ fontSize: '11px', color: 'var(--muted2)', whiteSpace: 'nowrap' }}>
-          Showing {table.getRowModel().rows.length} of {totalRecords ?? rows.length} records
+          Showing {rowModel.length} of {totalRecords ?? rows.length} records
         </div>
         <div
           style={{
@@ -587,62 +664,85 @@ export function CallLogTable({
                 gap: '5px',
                 padding: '3px 7px',
                 borderRadius: '10px',
-                border: '1px solid var(--border)',
-                background: 'var(--surface-alt)',
+                border: '1px solid rgba(56, 189, 248, 0.38)',
+                background: 'linear-gradient(135deg, rgba(18, 36, 80, 0.95), rgba(15, 33, 75, 0.9))',
+                boxShadow: 'inset 0 0 0 1px rgba(56, 189, 248, 0.18), 0 0 10px rgba(56, 189, 248, 0.14)',
                 fontSize: '10px',
-                color: 'var(--muted2)',
+                color: '#dbeafe',
+                fontWeight: 700,
                 whiteSpace: 'nowrap',
                 flexShrink: 0
               }}
               title={`${entry.code} = ${entry.label}`}
             >
-              <span className={STATUS_STYLE[entry.code] || 'sb2'} style={{ minWidth: '18px', textAlign: 'center', color: '#FFFFFF' }}>
+              <span
+                className={STATUS_STYLE[entry.code] || 'sb2'}
+                style={{
+                  minWidth: '18px',
+                  textAlign: 'center',
+                  color: '#FFFFFF',
+                  boxShadow: '0 0 8px rgba(59, 130, 246, 0.35)'
+                }}
+              >
                 {entry.code}
               </span>
-              <span>{entry.label}</span>
+              <span style={{ color: '#eef6ff' }}>{entry.label}</span>
             </span>
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <button
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
-            className="btn bg2"
-            style={{ fontSize: '11px', padding: '4px 10px', minWidth: '52px' }}
-          >
-            First
-          </button>
-          <button
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-            className="btn bg2"
-            style={{ fontSize: '11px', padding: '4px 10px', minWidth: '52px' }}
-          >
-            Prev
-          </button>
-          <span style={{ fontSize: '11px', color: 'var(--text)', whiteSpace: 'nowrap', minWidth: '88px', textAlign: 'center' }}>
-            Page {table.getState().pagination.pageIndex + 1} of {pageCount}
-          </span>
-          <button
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-            className="btn bg2"
-            style={{ fontSize: '11px', padding: '4px 10px', minWidth: '52px' }}
-          >
-            Next
-          </button>
-          <button
-            onClick={() => table.setPageIndex(Math.max(table.getPageCount() - 1, 0))}
-            disabled={!table.getCanNextPage()}
-            className="btn bg2"
-            style={{ fontSize: '11px', padding: '4px 10px', minWidth: '52px' }}
-          >
-            Last
-          </button>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
+            <button
+              onClick={() => table.setPageIndex(0)}
+              disabled={!table.getCanPreviousPage()}
+              className="btn bg2"
+              style={{ fontSize: '10px', height: '28px', padding: '0 10px', minWidth: '50px' }}
+            >
+              First
+            </button>
+            <button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="btn bg2"
+              style={{ fontSize: '10px', height: '28px', padding: '0 10px', minWidth: '50px' }}
+            >
+              Prev
+            </button>
+            <span style={{ fontSize: '11px', color: 'var(--text)', whiteSpace: 'nowrap', minWidth: '92px', textAlign: 'center' }}>
+              Page {table.getState().pagination.pageIndex + 1} of {pageCount}
+            </span>
+            <button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="btn bg2"
+              style={{ fontSize: '10px', height: '28px', padding: '0 10px', minWidth: '50px' }}
+            >
+              Next
+            </button>
+            <button
+              onClick={() => table.setPageIndex(Math.max(table.getPageCount() - 1, 0))}
+              disabled={!table.getCanNextPage()}
+              className="btn bg2"
+              style={{ fontSize: '10px', height: '28px', padding: '0 10px', minWidth: '50px' }}
+            >
+              Last
+            </button>
+          </div>
           <select
             value={table.getState().pagination.pageSize}
             onChange={(e) => table.setPageSize(Number(e.target.value))}
-            style={{ fontSize: '11px', padding: '4px 8px', background: 'var(--surface-alt)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: '7px' }}
+            style={{
+              fontSize: '11px',
+              height: '28px',
+              padding: '0 10px',
+              width: 'auto',
+              minWidth: '112px',
+              flex: '0 0 auto',
+              background: 'var(--surface-alt)',
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+              borderRadius: '7px'
+            }}
           >
             {[25, 50, 100, 250].map((size) => (
               <option key={size} value={size}>{size} / page</option>

@@ -258,9 +258,22 @@ prepare_source() {
     log_info "Existing git checkout found. Updating to ${REPO_REF}..."
     chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
     git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
-    git -C "$INSTALL_DIR" fetch --depth 1 --prune origin "$REPO_REF"
-    git -C "$INSTALL_DIR" checkout -B "$REPO_REF" FETCH_HEAD
-    git -C "$INSTALL_DIR" reset --hard FETCH_HEAD
+    git -C "$INSTALL_DIR" fetch --prune --tags origin
+
+    if git -C "$INSTALL_DIR" show-ref --verify --quiet "refs/remotes/origin/${REPO_REF}"; then
+      # Branch ref: always align to latest remote branch head.
+      git -C "$INSTALL_DIR" checkout -B "$REPO_REF" "origin/${REPO_REF}"
+      git -C "$INSTALL_DIR" reset --hard "origin/${REPO_REF}"
+    elif git -C "$INSTALL_DIR" show-ref --verify --quiet "refs/tags/${REPO_REF}"; then
+      # Tag ref: checkout detached tag state exactly.
+      git -C "$INSTALL_DIR" checkout -f "$REPO_REF"
+      git -C "$INSTALL_DIR" reset --hard "$REPO_REF"
+    else
+      # SHA or unknown ref: fetch explicit object and use FETCH_HEAD.
+      git -C "$INSTALL_DIR" fetch --depth 1 origin "$REPO_REF"
+      git -C "$INSTALL_DIR" checkout -f FETCH_HEAD
+      git -C "$INSTALL_DIR" reset --hard FETCH_HEAD
+    fi
     # Remove stale files from previous releases while preserving runtime config/state.
     git -C "$INSTALL_DIR" clean -fd -e config/ -e config/** || true
   else

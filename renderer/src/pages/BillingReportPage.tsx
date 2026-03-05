@@ -66,6 +66,7 @@ export function BillingReportPage() {
   const [exportingCsv, setExportingCsv] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [exportTopCallsLimit, setExportTopCallsLimit] = useState<number>(1000);
+  const [displayCurrency, setDisplayCurrency] = useState<'PHP' | 'USD'>('PHP');
 
   const {
     from,
@@ -91,6 +92,7 @@ export function BillingReportPage() {
     isStaleData,
     error,
     applyFilters,
+    clearFilters,
     fetchReport,
     buildReportQuery,
     categoryMetrics,
@@ -173,39 +175,50 @@ export function BillingReportPage() {
     }
   };
 
-  // Top spenders by extension derived from top cost calls
+  // Stable top spenders come from backend aggregation (not paged table rows).
   const topSpenders = useMemo(() => {
-    if (!data?.topCostCalls) return [];
-    const map = new Map<string, { calls: number; cost: number; currency: string }>();
-    for (const call of data.topCostCalls) {
-      const key = call.calling_party || '—';
-      const existing = map.get(key) ?? { calls: 0, cost: 0, currency: call.bill_currency };
-      existing.calls += 1;
-      existing.cost += call.call_cost;
-      map.set(key, existing);
-    }
-    return Array.from(map.entries())
-      .map(([ext, v]) => ({ ext, ...v }))
+    if (!data?.topSpenders?.length) return [];
+    const inDisplayCurrency = data.topSpenders
+      .filter((row) => row.currency === displayCurrency)
+      .map((row) => ({
+        ext: row.extension || '—',
+        calls: row.call_count,
+        cost: row.total_cost,
+        currency: row.currency
+      }))
       .sort((a, b) => b.cost - a.cost)
       .slice(0, 10);
-  }, [data?.topCostCalls]);
+    if (inDisplayCurrency.length > 0) return inDisplayCurrency;
+    return data.topSpenders
+      .map((row) => ({
+        ext: row.extension || '—',
+        calls: row.call_count,
+        cost: row.total_cost,
+        currency: row.currency
+      }))
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, 10);
+  }, [data?.topSpenders, displayCurrency]);
 
-  const avgCostPerCall = grandCalls > 0 ? totalCostNumeric / grandCalls : 0;
+  const selectedCurrencyTotal = categoryMetrics.totalsByCurrency.get(displayCurrency) ?? 0;
+  const avgCostPerCallSelectedCurrency = grandCalls > 0 ? selectedCurrencyTotal / grandCalls : 0;
 
   const blockingError = !loading && !data && !!error;
 
   return (
-    <div className="h-[calc(100vh-148px)] min-h-0 overflow-hidden flex flex-col gap-1.5">
+    <div className="app-page gap-1.5">
       <BillingReportFilters
         from={from}
         to={to}
         extension={extension}
         category={category}
+        appliedFilters={appliedFilters}
         setFrom={setFrom}
         setTo={setTo}
         setExtension={setExtension}
         setCategory={setCategory}
         onApply={applyFilters}
+        onClear={clearFilters}
         onExport={exportPDF}
         onExportCsv={exportCsv}
         loading={loading}
@@ -216,6 +229,8 @@ export function BillingReportPage() {
         setExportTopCallsLimit={setExportTopCallsLimit}
         topCallsTotal={topCallsTotal}
         exportLimitOptions={EXPORT_TOP_CALL_LIMITS}
+        displayCurrency={displayCurrency}
+        setDisplayCurrency={setDisplayCurrency}
       />
 
       {isRefreshing && data && (
@@ -264,22 +279,27 @@ export function BillingReportPage() {
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {loading && !data ? (
-          <div className="card p-8 text-center text-sm" style={{ color: 'var(--muted)' }}>Loading...</div>
+          <div className="grid gap-2 lg:grid-cols-12 animate-pulse">
+            <div className="card h-36 lg:col-span-3 xl:col-span-2" />
+            <div className="card h-36 lg:col-span-3 xl:col-span-2" />
+            <div className="card h-36 lg:col-span-6 xl:col-span-8" />
+            <div className="card h-24 lg:col-span-4" />
+            <div className="card h-24 lg:col-span-8" />
+            <div className="card h-[380px] lg:col-span-12" />
+          </div>
         ) : (
           data && (
-            <div className="grid gap-1.5 min-h-0 h-full overflow-hidden xl:grid-cols-12 xl:grid-rows-[auto_auto_auto_minmax(0,1fr)]">
+            <div className="grid gap-2 min-h-0 h-full overflow-hidden lg:grid-cols-12 lg:grid-rows-[auto_auto_auto_minmax(0,1fr)]">
               {/* Row 1: KPI cards */}
-              <div className="card p-5 rounded-2xl xl:col-span-2" style={{ background: 'var(--surface-alt)', borderColor: 'var(--brand)', borderWidth: '1px' }}>
+              <div className="card p-5 rounded-2xl lg:col-span-3 xl:col-span-2" style={{ background: 'var(--surface-alt)', borderColor: 'var(--brand)', borderWidth: '1px' }}>
                 <div className="text-center mb-3">
                   <p className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Total Charges</p>
                   <p className="text-3xl md:text-4xl font-bold mt-2" style={{ color: 'var(--brand)' }}>
-                    {categoryMetrics.primaryCurrency
-                      ? fmtCur(totalCostNumeric, categoryMetrics.primaryCurrency)
-                      : 'Multi-currency'}
+                    {fmtCur(selectedCurrencyTotal, displayCurrency)}
                   </p>
-                  {!categoryMetrics.primaryCurrency && (
-                    <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>{formatTotalsByCurrency(categoryMetrics.totalsByCurrency)}</p>
-                  )}
+                  <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>
+                    Displaying {displayCurrency} totals
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
                   <div className="text-center">
@@ -294,12 +314,12 @@ export function BillingReportPage() {
               </div>
 
               {/* Avg cost per call KPI */}
-              <div className="card p-5 rounded-2xl xl:col-span-2" style={{ background: 'var(--surface-alt)' }}>
+              <div className="card p-5 rounded-2xl lg:col-span-3 xl:col-span-2" style={{ background: 'var(--surface-alt)' }}>
                 <div className="text-center h-full flex flex-col justify-center">
                   <p className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--muted2)' }}>Avg Cost / Call</p>
                   <p className="text-4xl font-bold mt-3" style={{ color: grandCalls > 0 ? '#f59e0b' : 'var(--muted)' }}>
                     {grandCalls > 0
-                      ? (categoryMetrics.primaryCurrency ? fmtCur(avgCostPerCall, categoryMetrics.primaryCurrency) : `${avgCostPerCall.toFixed(2)}`)
+                      ? fmtCur(avgCostPerCallSelectedCurrency, displayCurrency)
                       : '—'}
                   </p>
                   <p className="text-sm mt-2" style={{ color: 'var(--muted2)' }}>across {grandCalls.toLocaleString()} calls</p>
@@ -307,7 +327,7 @@ export function BillingReportPage() {
               </div>
 
               {/* Daily trend chart */}
-              <div className="min-h-0 xl:col-span-8">
+              <div className="min-h-0 lg:col-span-6 xl:col-span-8">
                 <DailyTrendChart
                   trendData={trendModel.trendData}
                   trendCurrencies={trendModel.trendCurrencies}
@@ -317,7 +337,7 @@ export function BillingReportPage() {
               </div>
 
               {/* Row 2: Category breakdown */}
-              <div className="card p-3 xl:col-span-4">
+              <div className="card p-3 lg:col-span-4">
                 <div className="flex flex-wrap gap-2 justify-between items-center mb-2">
                   <p className="text-sm font-semibold" style={{ color: 'var(--muted)' }}>
                     {categoryMetrics.primaryCurrency ? 'Cost Breakdown' : 'Category Breakdown (by call volume)'}
@@ -352,7 +372,7 @@ export function BillingReportPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-1.5 xl:col-span-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-1.5 lg:col-span-8">
                 {CATEGORY_ORDER.map((cat) => {
                   const bucket = categoryMetrics.byCategory.get(cat);
                   const callCount = bucket?.callCount ?? 0;
@@ -378,8 +398,11 @@ export function BillingReportPage() {
 
               {/* Row 3: Top Spenders + Top Cost Calls Table */}
               {topSpenders.length > 0 && (
-                <div className="card xl:col-span-3" style={{ padding: '14px 16px', minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexShrink: 0 }}>
+                <div
+                  className="card lg:col-span-4 xl:col-span-3"
+                  style={{ padding: '12px 14px', minHeight: 0, maxHeight: 'clamp(280px, 48vh, 560px)', display: 'flex', flexDirection: 'column' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexShrink: 0 }}>
                     <div className="ct" style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text)' }}>Top Spenders by Extension</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: 'var(--muted2)' }}>
                       <div className="etrk" style={{ height: '5px', width: '20px', borderRadius: '3px' }}>
@@ -388,12 +411,17 @@ export function BillingReportPage() {
                       <span>Cost</span>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px', fontSize: '10px', color: 'var(--muted2)', fontWeight: 700, textTransform: 'uppercase', flexShrink: 0 }}>
+                  <div style={{ marginBottom: '8px', fontSize: '11px', color: 'var(--muted2)' }}>
+                    {topSpenders.some((row) => row.currency !== displayCurrency)
+                      ? `Showing mixed currencies (no ${displayCurrency} aggregate available)`
+                      : `Showing ${displayCurrency} totals`}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px', fontSize: '10px', color: 'var(--muted2)', fontWeight: 700, textTransform: 'uppercase', flexShrink: 0 }}>
                     <div>Extension</div>
                     <div style={{ textAlign: 'right' }}>Calls / Cost</div>
                   </div>
-                  <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '4px' }}>
-                    {topSpenders.map((s, i) => {
+                  <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '2px' }}>
+                    {topSpenders.map((s) => {
                       const maxCost = topSpenders[0].cost || 1;
                       const costPct = Math.max((s.cost / maxCost) * 100, 4);
                       return (
@@ -401,7 +429,7 @@ export function BillingReportPage() {
                           type="button"
                           key={s.ext}
                           className="erow"
-                          style={{ width: '100%', background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', padding: '8px 0' }}
+                          style={{ width: '100%', background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', padding: '7px 0' }}
                         >
                           <span className="mono" style={{ width: '48px', color: 'var(--text)', fontWeight: 700, fontSize: '12px' }}>{s.ext}</span>
                           <div className="etrk" style={{ height: '5px' }}>
@@ -418,7 +446,7 @@ export function BillingReportPage() {
                 </div>
               )}
 
-              <div className={topSpenders.length > 0 ? 'min-h-0 xl:col-span-9' : 'min-h-0 xl:col-span-12'}>
+              <div className={topSpenders.length > 0 ? 'min-h-0 lg:col-span-8 xl:col-span-9' : 'min-h-0 lg:col-span-12'}>
                 <TopCostCallsTable
                   topCostCalls={data.topCostCalls}
                   topCallsTotal={topCallsTotal}
@@ -443,6 +471,8 @@ export function BillingReportPage() {
                   }}
                   onPrevPage={() => setPage((prev) => Math.max(1, prev - 1))}
                   onNextPage={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                  onFirstPage={() => setPage(1)}
+                  onLastPage={() => setPage(totalPages)}
                 />
               </div>
             </div>

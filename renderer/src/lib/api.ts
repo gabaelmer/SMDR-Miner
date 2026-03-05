@@ -27,6 +27,7 @@ import {
 const isElectron = typeof window.smdrInsight !== 'undefined';
 // Use relative path - works for both localhost and remote
 const API_BASE = '';
+const DEV_LOG = import.meta.env.DEV;
 
 function formatApiErrorDetails(details: unknown): string {
     if (!details) return '';
@@ -487,14 +488,14 @@ export const api = {
                 const data = JSON.parse(e.data);
                 handler(data);
             } catch (err) {
-                console.error('[API] SSE Parse error', err);
+                if (DEV_LOG) console.error('[API] SSE Parse error', err);
             }
         };
 
         eventSource.onerror = (e) => {
             // Keep stream alive on transient network/server hiccups.
             // EventSource will automatically reconnect.
-            console.warn('[API] SSE Connection error, browser will retry:', e);
+            if (DEV_LOG) console.warn('[API] SSE Connection error, browser will retry:', e);
             options?.onError?.(e);
         };
 
@@ -631,7 +632,7 @@ export const api = {
     log: (level: string, message: string): void => {
         if (isElectron) {
             window.smdrInsight.log(level, message);
-        } else {
+        } else if (DEV_LOG) {
             console.log(`[${level.toUpperCase()}] ${message}`);
         }
     },
@@ -656,7 +657,7 @@ export const api = {
 
         const queryString = params.toString();
         const res = await rest<{ success: boolean; data: UsersListResponse | User[] }>(`/api/users${queryString ? `?${queryString}` : ''}`);
-        console.log('[API] getUsers response:', res);
+        if (DEV_LOG) console.log('[API] getUsers response:', res);
         if (!res.success) {
             throw new Error(res.data as any || 'Failed to fetch users');
         }
@@ -676,7 +677,7 @@ export const api = {
             page: Number.isFinite((res.data as UsersListResponse).page) ? (res.data as UsersListResponse).page : (query.page ?? 1),
             pageSize: Number.isFinite((res.data as UsersListResponse).pageSize) ? (res.data as UsersListResponse).pageSize : (query.pageSize ?? 20)
         };
-        console.log('[API] getUsers returning:', result);
+        if (DEV_LOG) console.log('[API] getUsers returning:', result);
         return result;
     },
 
@@ -742,7 +743,7 @@ export const api = {
         if (options?.limit) q.append('limit', String(options.limit));
         if (options?.offset) q.append('offset', String(options.offset));
         const res = await rest<{ success: boolean; data: AuditEntry[]; total: number }>('/api/audit-logs?' + q.toString());
-        console.log('[API] getAuditLogs response:', res);
+        if (DEV_LOG) console.log('[API] getAuditLogs response:', res);
         if (!res.success) {
             throw new Error((res.data as any)?.error || 'Failed to fetch audit logs');
         }

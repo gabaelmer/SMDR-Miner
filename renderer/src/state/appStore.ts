@@ -148,6 +148,12 @@ const defaultCallLogSummary: CallLogSummary = {
   topExtensionsReceived: []
 };
 
+const DEV_LOG = import.meta.env.DEV;
+
+function debugLog(...args: unknown[]): void {
+  if (DEV_LOG) console.log(...args);
+}
+
 interface AppState {
   initialized: boolean;
   isAuthenticated: boolean;
@@ -200,6 +206,7 @@ interface AppState {
 let unsubscribeEvents: (() => void) | undefined;
 let dashboardRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 let analyticsRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+let recordsRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 
 function cleanupLiveSubscriptions(): void {
   if (unsubscribeEvents) {
@@ -213,6 +220,10 @@ function cleanupLiveSubscriptions(): void {
   if (analyticsRefreshTimer) {
     clearTimeout(analyticsRefreshTimer);
     analyticsRefreshTimer = undefined;
+  }
+  if (recordsRefreshTimer) {
+    clearTimeout(recordsRefreshTimer);
+    recordsRefreshTimer = undefined;
   }
 }
 
@@ -248,7 +259,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   initialize: async () => {
     if (get().initialized) {
-      console.log('[AppStore] Already initialized, skipping');
+      debugLog('[AppStore] Already initialized, skipping');
       return;
     }
 
@@ -258,18 +269,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       // For browser mode, check if we have a valid session
       if (!api.isElectron()) {
         const isAuthed = await api.verifyAuth();
-        console.log('[AppStore] Auth check result:', isAuthed);
+        debugLog('[AppStore] Auth check result:', isAuthed);
         if (isAuthed) {
           set({ isAuthenticated: true });
         } else {
           cleanupLiveSubscriptions();
-          console.log('[AppStore] Not authenticated, showing login screen');
+          debugLog('[AppStore] Not authenticated, showing login screen');
           set({ initialized: true }); // No session, but we are initialized at login screen
           return;
         }
       }
 
-      console.log('[AppStore] Fetching initial state...');
+      debugLog('[AppStore] Fetching initial state...');
       const [config, state] = await Promise.all([api.getConfig(), api.getState()]);
       set({
         connectionStatus: String(state.connectionStatus ?? 'disconnected'),
@@ -279,7 +290,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         maxInMemoryRecords: Number(state.maxInMemoryRecords ?? 0)
       });
 
-      console.log('[AppStore] Fetching initial data...');
+      debugLog('[AppStore] Fetching initial data...');
       const filters = get().filters;
       const [recordsResult, summaryResult, dashboardResult, analyticsResult, alertsResult, parseErrorsResult] = await Promise.allSettled([
         api.getRecordsPage(filters),
@@ -326,7 +337,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         initialized: true,
         statusText: failedCount > 0 ? `Initialized with partial data (${failedCount} request${failedCount > 1 ? 's' : ''} failed)` : 'Initialized'
       });
-      console.log('[AppStore] Initialization complete');
+      debugLog('[AppStore] Initialization complete');
     } catch (error) {
       console.error('[AppStore] Initialization error:', error);
       const fallbackState = await api.getState().catch(() => undefined as ServiceState | undefined);
@@ -346,7 +357,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!unsubscribeEvents) {
       set({ sseConnectionStatus: 'connecting' });
       unsubscribeEvents = api.onServiceEvent((event) => {
-        console.log('[AppStore] Received event:', event.type);
+        debugLog('[AppStore] Received event:', event.type);
         const createdAt = new Date().toISOString();
         const summary = (() => {
           if (event.type === 'status') return String(event.payload ?? 'status');
@@ -380,12 +391,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (event.type === 'status') {
           const newStatus = String(event.payload);
           const oldStatus = get().connectionStatus;
-          console.log('[AppStore] Status change:', oldStatus, '->', newStatus);
+          debugLog('[AppStore] Status change:', oldStatus, '->', newStatus);
           set({ connectionStatus: newStatus });
 
           // Only refresh on transition to connected to avoid loops
           if (newStatus === 'connected' && oldStatus !== 'connected') {
-            console.log('[AppStore] Connection established, refreshing dashboard');
+            debugLog('[AppStore] Connection established, refreshing dashboard');
             void get().refreshDashboard(get().filters.date);
           }
         }
@@ -408,10 +419,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
           // Also refresh records to ensure call log is in sync
           if (get().activePage === 'calls' || get().activePage === 'dashboard') {
-            console.log('[AppStore] Refreshing call logs');
-            void get().refreshRecords().catch((error) => {
-              console.error('Records refresh failed', error);
-            });
+            if (recordsRefreshTimer) clearTimeout(recordsRefreshTimer);
+            recordsRefreshTimer = setTimeout(() => {
+              void get().refreshRecords().catch((error) => {
+                console.error('Records refresh failed', error);
+              });
+            }, 900);
           }
 
           if (get().activePage === 'analytics') {
@@ -429,19 +442,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         if (event.type === 'alert') {
           const alert = event.payload as AlertEvent;
-          console.log('[AppStore] Alert:', alert.type, alert.message);
+          debugLog('[AppStore] Alert:', alert.type, alert.message);
           set((state) => ({ alerts: [alert, ...state.alerts].slice(0, 500) }));
         }
 
         if (event.type === 'connection-event') {
           const payload = event.payload as { message?: string };
-          console.log('[AppStore] Connection event:', payload.message);
+          debugLog('[AppStore] Connection event:', payload.message);
           set({ statusText: payload.message ?? 'Connection event' });
         }
 
         if (event.type === 'parse-error') {
           const parseError = event.payload as ParseError;
-          console.log('[AppStore] Parse error:', parseError.reason);
+          debugLog('[AppStore] Parse error:', parseError.reason);
           set((state) => ({
             parseErrors: [parseError, ...state.parseErrors].slice(0, 500),
             statusText: `Parse error: ${parseError.reason}`
@@ -496,12 +509,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ recordsLoading: true });
     try {
       const filters = get().filters;
-      console.log('[AppStore] Refreshing records with filters:', filters);
+      debugLog('[AppStore] Refreshing records with filters:', filters);
       const [recordsPage, callLogSummary] = await Promise.all([
         api.getRecordsPage(filters),
         api.getRecordSummary(filters)
       ]);
-      console.log('[AppStore] Received', recordsPage.rows.length, 'records');
+      debugLog('[AppStore] Received', recordsPage.rows.length, 'records');
       set({
         records: recordsPage.rows,
         recordsTotal: recordsPage.total,

@@ -31,10 +31,13 @@ SMDR Insight is a web-based Mitel SMDR collector, parser, analytics, and billing
   - billing report/table containers now keep scroll localized,
   - top extension widgets now show full ranking with scroll,
   - alerts page now uses a fixed viewport container with only alert list scrolling.
+- Billing Report filter/export polish:
+  - export limit note is aligned inline under export capsules for clearer context.
 - Hardened Debian/Ubuntu installer:
   - supports root and sudo-based install flows,
   - installs required system tooling automatically,
-  - rebuilds from repo source so latest pushed changes are always included,
+  - resolves `--repo-ref` as branch/tag/SHA and always syncs to latest selected ref,
+  - rebuilds from repo source so latest pushed frontend/backend changes are always included,
   - removes stale release files on upgrade while preserving `config/` data.
 
 ## Build / Release Checklist
@@ -103,7 +106,7 @@ Installer behavior:
 - Installs OS tools/dependencies automatically (`git`, `curl`, `build-essential`, `python3`, `fontconfig`, `ufw`, etc.)
 - Installs/updates Node.js 24.x automatically
 - Clones/updates source in `/opt/smdr-insight`
-- On upgrade, hard-resets to the selected git ref and cleans stale files (preserves `/opt/smdr-insight/config`)
+- On upgrade, fetches latest `origin` state (with tags), resolves selected `--repo-ref` (branch/tag/SHA), hard-resets to it, and cleans stale files (preserves `/opt/smdr-insight/config`)
 - Installs npm dependencies and rebuilds native modules (`better-sqlite3`)
 - Rebuilds app from source (`npm run build`) so all pushed frontend/backend changes are included
 - Creates and starts `smdr-insight.service`

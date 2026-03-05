@@ -20,6 +20,8 @@ interface AppliedFilters {
   category: FilterCategory;
 }
 
+type AppliedFilterPatch = Partial<AppliedFilters>;
+
 function normalizeInput(value: unknown): string {
   if (typeof value === 'string') return value.trim();
   if (value === null || value === undefined) return '';
@@ -110,9 +112,11 @@ export function useBillingReportData() {
     };
   }, [appliedFilters, sortBy, sortDir, page, pageSize]);
 
-  const applyFilters = (newFrom?: string, newTo?: string) => {
-    const trimmedFrom = normalizeInput(newFrom !== undefined ? newFrom : from);
-    const trimmedTo = normalizeInput(newTo !== undefined ? newTo : to);
+  const applyFilters = (patch: AppliedFilterPatch = {}) => {
+    const trimmedFrom = normalizeInput(patch.from !== undefined ? patch.from : from);
+    const trimmedTo = normalizeInput(patch.to !== undefined ? patch.to : to);
+    const normalizedExtension = normalizeInput(patch.extension !== undefined ? patch.extension : extension);
+    const nextCategory = patch.category ?? category;
     setError(null);
     if (!ISO_DATE_RE.test(trimmedFrom) || !ISO_DATE_RE.test(trimmedTo)) {
       setError('Dates must be in YYYY-MM-DD format.');
@@ -127,10 +131,25 @@ export function useBillingReportData() {
     setAppliedFilters({
       from: trimmedFrom,
       to: trimmedTo,
-      extension: normalizeInput(extension),
-      category
+      extension: normalizedExtension,
+      category: nextCategory
     });
     return true;
+  };
+
+  const clearFilters = () => {
+    setError(null);
+    setFrom(defaultFrom);
+    setTo(today);
+    setExtension('');
+    setCategory('all');
+    setPage(1);
+    setAppliedFilters({
+      from: defaultFrom,
+      to: today,
+      extension: '',
+      category: 'all'
+    });
   };
 
   const summaryRows = data?.summary ?? [];
@@ -166,6 +185,7 @@ export function useBillingReportData() {
     isStaleData,
     error,
     applyFilters,
+    clearFilters,
     fetchReport,
     buildReportQuery,
     summaryRows,
